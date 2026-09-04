@@ -1,0 +1,36 @@
+#include <windows.h>
+
+1 RT_MANIFEST "@MANIADANOVERLAY_WINDOWS_MANIFEST@"
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION @MANIADANOVERLAY_VERSION_MAJOR@,@MANIADANOVERLAY_VERSION_MINOR@,@MANIADANOVERLAY_VERSION_PATCH@,0
+ PRODUCTVERSION @MANIADANOVERLAY_VERSION_MAJOR@,@MANIADANOVERLAY_VERSION_MINOR@,@MANIADANOVERLAY_VERSION_PATCH@,0
+ FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+#ifdef _DEBUG
+ FILEFLAGS VS_FF_DEBUG
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_APP
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName", "Tanese\0"
+            VALUE "FileDescription", "ManiaDanOverlay by Tanese\0"
+            VALUE "FileVersion", "@PROJECT_VERSION@\0"
+            VALUE "InternalName", "ManiaDanOverlay\0"
+            VALUE "LegalCopyright", "Copyright (c) Tanese\0"
+            VALUE "OriginalFilename", "ManiaDanOverlay.exe\0"
+            VALUE "ProductName", "ManiaDanOverlay\0"
+            VALUE "ProductVersion", "@PROJECT_VERSION@\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1200
+    END
+END
