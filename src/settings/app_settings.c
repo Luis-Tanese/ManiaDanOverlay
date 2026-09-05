@@ -162,6 +162,110 @@ static bool flush_settings_file(
     return true;
 }
 
+int AppSettingsViewDefaultWidth(
+    AppSettingsViewMode view_mode
+)
+{
+    return
+        view_mode == APP_SETTINGS_VIEW_EXTRA_INFO
+            ? APP_SETTINGS_EXTRA_INFO_DEFAULT_WIDTH
+            : APP_SETTINGS_HUD_DEFAULT_WIDTH;
+}
+
+int AppSettingsViewDefaultHeight(
+    AppSettingsViewMode view_mode
+)
+{
+    return
+        view_mode == APP_SETTINGS_VIEW_EXTRA_INFO
+            ? APP_SETTINGS_EXTRA_INFO_DEFAULT_HEIGHT
+            : APP_SETTINGS_HUD_DEFAULT_HEIGHT;
+}
+
+int AppSettingsViewMinWidth(
+    AppSettingsViewMode view_mode
+)
+{
+    return
+        view_mode == APP_SETTINGS_VIEW_EXTRA_INFO
+            ? APP_SETTINGS_EXTRA_INFO_MIN_WIDTH
+            : APP_SETTINGS_HUD_MIN_WIDTH;
+}
+
+int AppSettingsViewMinHeight(
+    AppSettingsViewMode view_mode
+)
+{
+    return
+        view_mode == APP_SETTINGS_VIEW_EXTRA_INFO
+            ? APP_SETTINGS_EXTRA_INFO_MIN_HEIGHT
+            : APP_SETTINGS_HUD_MIN_HEIGHT;
+}
+
+int AppSettingsViewWidth(
+    const AppSettings *settings,
+    AppSettingsViewMode view_mode
+)
+{
+    if (!settings)
+        return AppSettingsViewDefaultWidth(view_mode);
+
+    return
+        view_mode == APP_SETTINGS_VIEW_EXTRA_INFO
+            ? settings->extra_info_window_width
+            : settings->hud_window_width;
+}
+
+int AppSettingsViewHeight(
+    const AppSettings *settings,
+    AppSettingsViewMode view_mode
+)
+{
+    if (!settings)
+        return AppSettingsViewDefaultHeight(view_mode);
+
+    return
+        view_mode == APP_SETTINGS_VIEW_EXTRA_INFO
+            ? settings->extra_info_window_height
+            : settings->hud_window_height;
+}
+
+void AppSettingsSetViewSize(
+    AppSettings *settings,
+    AppSettingsViewMode view_mode,
+    int width,
+    int height
+)
+{
+    if (!settings)
+        return;
+
+    const int clean_width =
+        clamp_int(
+            width,
+            AppSettingsViewMinWidth(view_mode),
+            APP_SETTINGS_MAX_WIDTH
+        );
+
+    const int clean_height =
+        clamp_int(
+            height,
+            AppSettingsViewMinHeight(view_mode),
+            APP_SETTINGS_MAX_HEIGHT
+        );
+
+    if (view_mode == APP_SETTINGS_VIEW_EXTRA_INFO)
+    {
+        settings->extra_info_window_width = clean_width;
+        settings->extra_info_window_height = clean_height;
+    }
+    else
+    {
+        settings->hud_window_width = clean_width;
+        settings->hud_window_height = clean_height;
+    }
+}
+
 void AppSettingsDefaults(
     AppSettings *settings
 )
@@ -185,8 +289,11 @@ void AppSettingsDefaults(
 
         .window_x = 1920,
         .window_y = 381,
-        .window_width = APP_SETTINGS_DEFAULT_WIDTH,
-        .window_height = APP_SETTINGS_DEFAULT_HEIGHT
+
+        .hud_window_width = APP_SETTINGS_HUD_DEFAULT_WIDTH,
+        .hud_window_height = APP_SETTINGS_HUD_DEFAULT_HEIGHT,
+        .extra_info_window_width = APP_SETTINGS_EXTRA_INFO_DEFAULT_WIDTH,
+        .extra_info_window_height = APP_SETTINGS_EXTRA_INFO_DEFAULT_HEIGHT
     };
 }
 
@@ -218,19 +325,19 @@ void AppSettingsSanitize(
     settings->focus_span_seconds =
         nearest_focus_span(settings->focus_span_seconds);
 
-    settings->window_width =
-        clamp_int(
-            settings->window_width,
-            APP_SETTINGS_MIN_WIDTH,
-            3840
-        );
+    AppSettingsSetViewSize(
+        settings,
+        APP_SETTINGS_VIEW_HUD,
+        settings->hud_window_width,
+        settings->hud_window_height
+    );
 
-    settings->window_height =
-        clamp_int(
-            settings->window_height,
-            APP_SETTINGS_MIN_HEIGHT,
-            2160
-        );
+    AppSettingsSetViewSize(
+        settings,
+        APP_SETTINGS_VIEW_EXTRA_INFO,
+        settings->extra_info_window_width,
+        settings->extra_info_window_height
+    );
 
     settings->window_x =
         clamp_int(
@@ -430,11 +537,50 @@ bool AppSettingsLoad(
         settings->window_y =
             json_int_or(window, "y", settings->window_y);
 
-        settings->window_width =
-            json_int_or(window, "width", settings->window_width);
+        yyjson_val *hud = yyjson_obj_get(window, "hud");
+        yyjson_val *extra = yyjson_obj_get(window, "extra_info");
 
-        settings->window_height =
-            json_int_or(window, "height", settings->window_height);
+        if (version >= 4)
+        {
+            if (hud && yyjson_is_obj(hud))
+            {
+                settings->hud_window_width =
+                    json_int_or(hud, "width", settings->hud_window_width);
+                settings->hud_window_height =
+                    json_int_or(hud, "height", settings->hud_window_height);
+            }
+
+            if (extra && yyjson_is_obj(extra))
+            {
+                settings->extra_info_window_width =
+                    json_int_or(extra, "width", settings->extra_info_window_width);
+                settings->extra_info_window_height =
+                    json_int_or(extra, "height", settings->extra_info_window_height);
+            }
+        }
+        else
+        {
+            const int old_width =
+                json_int_or(
+                    window,
+                    "width",
+                    AppSettingsViewDefaultWidth(settings->view_mode)
+                );
+
+            const int old_height =
+                json_int_or(
+                    window,
+                    "height",
+                    AppSettingsViewDefaultHeight(settings->view_mode)
+                );
+
+            AppSettingsSetViewSize(
+                settings,
+                settings->view_mode,
+                old_width,
+                old_height
+            );
+        }
     }
 
     yyjson_doc_free(document);
@@ -530,8 +676,14 @@ bool AppSettingsSave(
             "    \"has_position\": %s,\n"
             "    \"x\": %d,\n"
             "    \"y\": %d,\n"
-            "    \"width\": %d,\n"
-            "    \"height\": %d\n"
+            "    \"hud\": {\n"
+            "      \"width\": %d,\n"
+            "      \"height\": %d\n"
+            "    },\n"
+            "    \"extra_info\": {\n"
+            "      \"width\": %d,\n"
+            "      \"height\": %d\n"
+            "    }\n"
             "  }\n"
             "}\n",
             APP_SETTINGS_VERSION,
@@ -544,8 +696,10 @@ bool AppSettingsSave(
             clean.has_window_position ? "true" : "false",
             clean.window_x,
             clean.window_y,
-            clean.window_width,
-            clean.window_height
+            clean.hud_window_width,
+            clean.hud_window_height,
+            clean.extra_info_window_width,
+            clean.extra_info_window_height
         );
 
     if (write_result < 0)

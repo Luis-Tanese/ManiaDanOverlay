@@ -104,8 +104,10 @@ static bool app_settings_equal(
         a->has_window_position == b->has_window_position &&
         a->window_x == b->window_x &&
         a->window_y == b->window_y &&
-        a->window_width == b->window_width &&
-        a->window_height == b->window_height;
+        a->hud_window_width == b->hud_window_width &&
+        a->hud_window_height == b->hud_window_height &&
+        a->extra_info_window_width == b->extra_info_window_width &&
+        a->extra_info_window_height == b->extra_info_window_height;
 }
 
 
@@ -123,8 +125,19 @@ static bool saved_window_position_is_visible(
 
     const float left = (float)settings->window_x;
     const float top = (float)settings->window_y;
-    const float right = left + (float)settings->window_width;
-    const float bottom = top + (float)settings->window_height;
+    const float right =
+        left +
+        (float)AppSettingsViewWidth(
+            settings,
+            settings->view_mode
+        );
+
+    const float bottom =
+        top +
+        (float)AppSettingsViewHeight(
+            settings,
+            settings->view_mode
+        );
 
     const int monitor_count = GetMonitorCount();
 
@@ -164,6 +177,66 @@ static bool saved_window_position_is_visible(
 }
 
 
+static void apply_window_size_for_view(
+    AppSettings *settings,
+    AppSettingsViewMode view_mode
+)
+{
+    if (!settings)
+        return;
+
+    const int width =
+        settings->remember_window_size
+            ? AppSettingsViewWidth(settings, view_mode)
+            : AppSettingsViewDefaultWidth(view_mode);
+
+    const int height =
+        settings->remember_window_size
+            ? AppSettingsViewHeight(settings, view_mode)
+            : AppSettingsViewDefaultHeight(view_mode);
+
+    const int monitor = GetCurrentMonitor();
+    const Vector2 old_position = GetWindowPosition();
+    const Vector2 monitor_position = GetMonitorPosition(monitor);
+    const int monitor_width = GetMonitorWidth(monitor);
+    const int monitor_height = GetMonitorHeight(monitor);
+
+    SetWindowMinSize(
+        AppSettingsViewMinWidth(view_mode),
+        AppSettingsViewMinHeight(view_mode)
+    );
+
+    SetWindowSize(width, height);
+
+    const float min_visible = 64.0f;
+    const float min_x =
+        monitor_position.x - (float)width + min_visible;
+    const float max_x =
+        monitor_position.x + (float)monitor_width - min_visible;
+    const float min_y =
+        monitor_position.y - (float)height + min_visible;
+    const float max_y =
+        monitor_position.y + (float)monitor_height - min_visible;
+
+    const int x =
+        (int)fminf(fmaxf(old_position.x, min_x), max_x);
+    const int y =
+        (int)fminf(fmaxf(old_position.y, min_y), max_y);
+
+    if (x != (int)old_position.x || y != (int)old_position.y)
+    {
+        SetWindowPosition(x, y);
+
+        if (settings->remember_window_position)
+        {
+            settings->window_x = x;
+            settings->window_y = y;
+            settings->has_window_position = true;
+        }
+    }
+}
+
+
 int main(void)
 {
     AppSettings settings;
@@ -192,13 +265,23 @@ int main(void)
 
     const int launch_width =
         settings.remember_window_size
-            ? settings.window_width
-            : APP_SETTINGS_DEFAULT_WIDTH;
+            ? AppSettingsViewWidth(
+                &settings,
+                settings.view_mode
+            )
+            : AppSettingsViewDefaultWidth(
+                settings.view_mode
+            );
 
     const int launch_height =
         settings.remember_window_size
-            ? settings.window_height
-            : APP_SETTINGS_DEFAULT_HEIGHT;
+            ? AppSettingsViewHeight(
+                &settings,
+                settings.view_mode
+            )
+            : AppSettingsViewDefaultHeight(
+                settings.view_mode
+            );
 
     InitWindow(
         launch_width,
@@ -214,8 +297,8 @@ int main(void)
         ClearWindowState(FLAG_WINDOW_TOPMOST);
 
     SetWindowMinSize(
-        APP_SETTINGS_MIN_WIDTH,
-        APP_SETTINGS_MIN_HEIGHT
+        AppSettingsViewMinWidth(settings.view_mode),
+        AppSettingsViewMinHeight(settings.view_mode)
     );
 
     if (
@@ -506,14 +589,28 @@ int main(void)
             {
                 const int width = GetScreenWidth();
                 const int height = GetScreenHeight();
+                const int saved_width =
+                    AppSettingsViewWidth(
+                        &settings,
+                        settings.view_mode
+                    );
+                const int saved_height =
+                    AppSettingsViewHeight(
+                        &settings,
+                        settings.view_mode
+                    );
 
                 if (
-                    width != settings.window_width ||
-                    height != settings.window_height
+                    width != saved_width ||
+                    height != saved_height
                 )
                 {
-                    settings.window_width = width;
-                    settings.window_height = height;
+                    AppSettingsSetViewSize(
+                        &settings,
+                        settings.view_mode,
+                        width,
+                        height
+                    );
 
                     mark_settings_dirty(
                         &settings_dirty,
@@ -1396,19 +1493,30 @@ int main(void)
                     settings.always_on_top;
             }
 
+            const bool view_changed =
+                settings.view_mode !=
+                    settings_before_ui.view_mode;
+
+            const bool view_size_changed =
+                settings.hud_window_width !=
+                    settings_before_ui.hud_window_width ||
+                settings.hud_window_height !=
+                    settings_before_ui.hud_window_height ||
+                settings.extra_info_window_width !=
+                    settings_before_ui.extra_info_window_width ||
+                settings.extra_info_window_height !=
+                    settings_before_ui.extra_info_window_height ||
+                settings.remember_window_size !=
+                    settings_before_ui.remember_window_size;
+
             if (
                 !obs_hide_mode &&
-                (
-                    settings.window_width !=
-                        settings_before_ui.window_width ||
-                    settings.window_height !=
-                        settings_before_ui.window_height
-                )
+                (view_changed || view_size_changed)
             )
             {
-                SetWindowSize(
-                    settings.window_width,
-                    settings.window_height
+                apply_window_size_for_view(
+                    &settings,
+                    settings.view_mode
                 );
             }
 

@@ -4,15 +4,23 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#define APP_SETTINGS_VERSION 3
+#define APP_SETTINGS_VERSION 4
 
-#define APP_SETTINGS_DEFAULT_WIDTH 503
-#define APP_SETTINGS_DEFAULT_HEIGHT 240
+#define APP_SETTINGS_HUD_DEFAULT_WIDTH 503
+#define APP_SETTINGS_HUD_DEFAULT_HEIGHT 240
+#define APP_SETTINGS_EXTRA_INFO_DEFAULT_WIDTH 900
+#define APP_SETTINGS_EXTRA_INFO_DEFAULT_HEIGHT 600
 
 #define APP_SETTINGS_DESIGN_WIDTH 900
 #define APP_SETTINGS_DESIGN_HEIGHT 600
-#define APP_SETTINGS_MIN_WIDTH 360
-#define APP_SETTINGS_MIN_HEIGHT 240
+
+#define APP_SETTINGS_HUD_MIN_WIDTH 360
+#define APP_SETTINGS_HUD_MIN_HEIGHT 240
+#define APP_SETTINGS_EXTRA_INFO_MIN_WIDTH 540
+#define APP_SETTINGS_EXTRA_INFO_MIN_HEIGHT 360
+
+#define APP_SETTINGS_MAX_WIDTH 3840
+#define APP_SETTINGS_MAX_HEIGHT 2160
 
 typedef enum
 {
@@ -42,8 +50,11 @@ typedef struct
 
     int window_x;
     int window_y;
-    int window_width;
-    int window_height;
+
+    int hud_window_width;
+    int hud_window_height;
+    int extra_info_window_width;
+    int extra_info_window_height;
 } AppSettings;
 
 void AppSettingsDefaults(
@@ -52,6 +63,39 @@ void AppSettingsDefaults(
 
 void AppSettingsSanitize(
     AppSettings *settings
+);
+
+int AppSettingsViewWidth(
+    const AppSettings *settings,
+    AppSettingsViewMode view_mode
+);
+
+int AppSettingsViewHeight(
+    const AppSettings *settings,
+    AppSettingsViewMode view_mode
+);
+
+int AppSettingsViewDefaultWidth(
+    AppSettingsViewMode view_mode
+);
+
+int AppSettingsViewDefaultHeight(
+    AppSettingsViewMode view_mode
+);
+
+int AppSettingsViewMinWidth(
+    AppSettingsViewMode view_mode
+);
+
+int AppSettingsViewMinHeight(
+    AppSettingsViewMode view_mode
+);
+
+void AppSettingsSetViewSize(
+    AppSettings *settings,
+    AppSettingsViewMode view_mode,
+    int width,
+    int height
 );
 
 bool AppSettingsLoad(

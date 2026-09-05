@@ -220,8 +220,18 @@ static bool size_matches_percent(
         APP_SETTINGS_DESIGN_HEIGHT * percent / 100;
 
     return
-        abs(settings->window_width - expected_width) <= 3 &&
-        abs(settings->window_height - expected_height) <= 3;
+        abs(
+            AppSettingsViewWidth(
+                settings,
+                settings->view_mode
+            ) - expected_width
+        ) <= 3 &&
+        abs(
+            AppSettingsViewHeight(
+                settings,
+                settings->view_mode
+            ) - expected_height
+        ) <= 3;
 }
 
 static void apply_size_percent(
@@ -231,10 +241,12 @@ static void apply_size_percent(
     if (!settings)
         return;
 
-    settings->window_width =
-        APP_SETTINGS_DESIGN_WIDTH * percent / 100;
-    settings->window_height =
-        APP_SETTINGS_DESIGN_HEIGHT * percent / 100;
+    AppSettingsSetViewSize(
+        settings,
+        settings->view_mode,
+        APP_SETTINGS_DESIGN_WIDTH * percent / 100,
+        APP_SETTINGS_DESIGN_HEIGHT * percent / 100
+    );
 
     settings->remember_window_size = true;
 }
@@ -377,7 +389,7 @@ bool SettingsPanelDraw(
         fmaxf(footer_top - header_bottom - 14.0f, 1.0f)
     };
 
-    const float content_height = 640.0f;
+    const float content_height = 666.0f;
     const float max_scroll =
         fmaxf(content_height - viewport.height, 0.0f);
 
@@ -555,13 +567,36 @@ bool SettingsPanelDraw(
 
     draw_label("WINDOW", left, y, 12.0f, MUTED, true);
     y += 22.0f;
-    draw_label("3:2 size presets", left, y, 12.0f, MUTED, false);
+
+    char size_label[96];
+    snprintf(
+        size_label,
+        sizeof(size_label),
+        "%s size  %d x %d",
+        settings->view_mode == APP_SETTINGS_VIEW_EXTRA_INFO
+            ? "Extra Info"
+            : "HUD",
+        AppSettingsViewWidth(settings, settings->view_mode),
+        AppSettingsViewHeight(settings, settings->view_mode)
+    );
+
+    draw_label(size_label, left, y, 12.0f, MUTED, false);
     y += 20.0f;
 
-    static const int scales[] =
+    static const int hud_scales[] =
     {
         40, 50, 60, 75, 100
     };
+
+    static const int extra_scales[] =
+    {
+        60, 75, 100, 125, 150
+    };
+
+    const int *scales =
+        settings->view_mode == APP_SETTINGS_VIEW_EXTRA_INFO
+            ? extra_scales
+            : hud_scales;
 
     const float scale_gap = 5.0f;
     const float scale_width =
@@ -595,7 +630,7 @@ bool SettingsPanelDraw(
     y += 39.0f;
 
     draw_label(
-        "Drag any edge/corner freely. HUD and Extra Info use the full window shape.",
+        "Each view remembers its own size. Position stays shared between views.",
         left,
         y,
         11.5f,
@@ -631,7 +666,7 @@ bool SettingsPanelDraw(
         draw_toggle_row(
             (Rectangle){left, y, content_width, 50.0f},
             "Remember size",
-            "Restore your resized overlay window next launch.",
+            "Restore the saved size for each view on launch and view changes.",
             &settings->remember_window_size,
             theme
         );

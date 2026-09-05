@@ -9,7 +9,6 @@
 #include "ui/settings_panel.h"
 
 static const Color BG = {21, 23, 25, 255};
-static const Color PANEL = {29, 32, 34, 255};
 static const Color PANEL_INSET = {25, 28, 30, 255};
 static const Color TEXT = {232, 229, 223, 255};
 static const Color MUTED = {140, 140, 135, 255};
@@ -24,16 +23,18 @@ static float g_ui_scale = 1.0f;
 static float minimum_physical_font_size(float nominal_size)
 {
     if (nominal_size >= 30.0f)
-        return 17.0f;
+        return 19.0f;
     if (nominal_size >= 22.0f)
-        return 13.0f;
+        return 16.0f;
     if (nominal_size >= 18.0f)
-        return 11.5f;
+        return 14.0f;
     if (nominal_size >= 15.0f)
-        return 10.0f;
+        return 12.0f;
     if (nominal_size >= 13.0f)
-        return 9.0f;
-    return 8.0f;
+        return 11.0f;
+    if (nominal_size >= 11.0f)
+        return 10.0f;
+    return 9.0f;
 }
 
 static float readable_font_size(float nominal_size)
@@ -335,8 +336,7 @@ static float physical_pixel_step(void)
 
 static void draw_panel(Rectangle bounds)
 {
-    DrawRectangleRounded(bounds, 0.035f, 8, PANEL);
-    DrawRectangleRoundedLinesEx(bounds, 0.035f, 8, 1.0f, RULE);
+    (void)bounds;
 }
 
 static void draw_section_label(const char *text, float x, float y)
@@ -1546,9 +1546,9 @@ static void draw_nps_graph(const AppViewModel *model, Rectangle bounds)
     double view_end = last_time;
 
     /* 
-    * overview always shows the whole chart. 
-    * focus is a moving time window with the playhead about 35 percent from the left, leaving useful look-ahead. 
-    */
+     * overview always shows the whole chart. 
+     * focus is a moving time window with the playhead about 35 percent from the left, leaving useful look-ahead. 
+     */
 
     if (model->graph_mode == DENSITY_GRAPH_FOCUS)
     {
@@ -1609,9 +1609,9 @@ static void draw_nps_graph(const AppViewModel *model, Rectangle bounds)
         );
 
     /* 
-    * overview gets display-only smoothing because thousands of 250 ms samples become visually rough when compressed. 
-    * focus keeps the raw shape. 
-    */
+     * overview gets display-only smoothing because thousands of 250 ms samples become visually rough when compressed. 
+     * focus keeps the raw shape. 
+     */
 
     if (overview_mode)
     {
@@ -2100,14 +2100,97 @@ static void draw_footer(
 
 static void draw_disconnected(const AppViewModel *model)
 {
-    const float width = fmin((float)g_canvas_width - 48.0f, 460.0f);
-    const Rectangle panel = {((float)g_canvas_width - width) * 0.5f, ((float)g_canvas_height - 160.0f) * 0.5f, width, 160.0f};
+    const float maximum_width =
+        fmaxf((float)g_canvas_width - 48.0f, 1.0f);
 
-    draw_panel(panel);
+    const char *title = "TOSU OFFLINE";
+    const char *body = "Waiting for osu!lazer telemetry...";
+    const char *detail =
+        "The last valid state is preserved across brief poll drops.";
 
-    ui_draw_text(UiFontBold(), "TOSU OFFLINE", (Vector2){panel.x + 22.0f, panel.y + 28.0f}, 23.0f, 0.0f, BAD);
-    ui_draw_text(UiFontRegular(), "Waiting for osu!lazer telemetry...", (Vector2){panel.x + 22.0f, panel.y + 72.0f}, 16.0f, 0.0f, TEXT);
-    ui_draw_text(UiFontRegular(), "The last valid state is preserved across brief poll drops.", (Vector2){panel.x + 22.0f, panel.y + 104.0f}, 13.0f, 0.0f, MUTED);
+    const float title_size =
+        hud_fit_font_size(
+            UiFontBold(),
+            title,
+            34.0f,
+            22.0f,
+            maximum_width
+        );
+
+    const float body_size =
+        hud_fit_font_size(
+            UiFontRegular(),
+            body,
+            20.0f,
+            14.0f,
+            maximum_width
+        );
+
+    const float detail_size =
+        hud_fit_font_size(
+            UiFontRegular(),
+            detail,
+            15.0f,
+            11.0f,
+            maximum_width
+        );
+
+    const Vector2 title_bounds =
+        MeasureTextEx(UiFontBold(), title, title_size, 0.0f);
+    const Vector2 body_bounds =
+        MeasureTextEx(UiFontRegular(), body, body_size, 0.0f);
+    const Vector2 detail_bounds =
+        MeasureTextEx(UiFontRegular(), detail, detail_size, 0.0f);
+
+    const float center_x = (float)g_canvas_width * 0.5f;
+    const float center_y = (float)g_canvas_height * 0.5f;
+
+    DrawTextEx(
+        UiFontBold(),
+        title,
+        (Vector2)
+        {
+            center_x - title_bounds.x * 0.5f,
+            center_y - 62.0f
+        },
+        title_size,
+        0.0f,
+        BAD
+    );
+
+    DrawLine(
+        (int)(center_x - fminf(maximum_width * 0.28f, 180.0f)),
+        (int)(center_y - 22.0f),
+        (int)(center_x + fminf(maximum_width * 0.28f, 180.0f)),
+        (int)(center_y - 22.0f),
+        RULE
+    );
+
+    DrawTextEx(
+        UiFontRegular(),
+        body,
+        (Vector2)
+        {
+            center_x - body_bounds.x * 0.5f,
+            center_y - 7.0f
+        },
+        body_size,
+        0.0f,
+        TEXT
+    );
+
+    DrawTextEx(
+        UiFontRegular(),
+        detail,
+        (Vector2)
+        {
+            center_x - detail_bounds.x * 0.5f,
+            center_y + 30.0f
+        },
+        detail_size,
+        0.0f,
+        MUTED
+    );
 
     (void)model;
 }
@@ -2611,13 +2694,18 @@ static void draw_hud_player(
             margin
     };
 
-    DrawRectangleRounded(info, 0.02f, 8, PANEL);
-    DrawRectangleRoundedLinesEx(info, 0.02f, 8, 1.0f, RULE);
+    DrawLine(
+        (int)info.x,
+        (int)info.y,
+        (int)(info.x + info.width),
+        (int)info.y,
+        RULE
+    );
 
     DrawRectangle(
-        (int)(info.x + 1.0f),
+        (int)info.x,
         (int)info.y,
-        (int)(info.width - 2.0f),
+        (int)fminf(info.width * 0.22f, 180.0f),
         2,
         translucent(model->theme.accent, 190)
     );
@@ -2721,6 +2809,17 @@ static void draw_common_player_layout(
     (void)simple_view;
     draw_pattern_panel(model, pattern_panel);
 
+    const float split_x =
+        rank_panel.x + rank_panel.width + gap * 0.5f;
+
+    DrawLine(
+        (int)split_x,
+        (int)(cards_y + 8.0f),
+        (int)split_x,
+        (int)(cards_y + cards_height - 8.0f),
+        RULE
+    );
+
     const float density_y =
         cards_y +
         cards_height +
@@ -2748,6 +2847,14 @@ static void draw_common_player_layout(
                 available * 0.52f
             );
     }
+
+    DrawLine(
+        (int)margin,
+        (int)(density_panel.y - 6.0f),
+        (int)(margin + usable),
+        (int)(density_panel.y - 6.0f),
+        RULE
+    );
 
     draw_density_panel(model, density_panel);
 
