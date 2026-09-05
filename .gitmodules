@@ -1,0 +1,9 @@
+[submodule "vendor/raylib"]
+	path = vendor/raylib
+	url = https://github.com/raysan5/raylib
+[submodule "vendor/yyjson"]
+	path = vendor/yyjson
+	url = https://github.com/ibireme/yyjson
+[submodule "vendor/minacalc"]
+	path = vendor/minacalc
+	url = https://github.com/kangalio/minacalc-standalone
