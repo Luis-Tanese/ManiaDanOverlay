@@ -25,6 +25,3 @@ CMakeUserPresets.json
 # OS junk
 .DS_Store
 Thumbs.db
-
-# Git submodules
-/vendor/
