@@ -246,6 +246,11 @@ static double rescale_high(double sr)
     return 9.0 + (sr - 9.0) / 1.2;
 }
 
+/* 
+ * Sunny intentionally works from note heads here. 
+ * keep this path close to the reference implementation when changing the port. *
+ */
+
 static bool build_notes(
     const AnalysisMap *map,
     SunnyNote **out_notes,
@@ -1588,6 +1593,9 @@ bool SunnySrCalculate(
         normalized_cumulative[i] =
             cumulative / total_weight;
     }
+
+    /* These percentile samples and the aggregation below are part of the Sunny
+       reference behavior. Reordering the math can move calibrated SR values. */
 
     static const double targets[8] =
     {

@@ -18,6 +18,7 @@
 #include "engine/reform_rank.h"
 #include "engine/rhythm_profile.h"
 #include "engine/ruler_sanity.h"
+#include "calibration/mania4k_calibration.h"
 #include "engine/sunny_sr.h"
 
 #include "tosu/tosu.h"
@@ -107,6 +108,11 @@ static bool app_settings_equal(
         a->window_height == b->window_height;
 }
 
+
+/* 
+ * a saved position only counts if enough of the window is still reachable.
+ * this matters after monitors are unplugged or rearranged. 
+ */
 
 static bool saved_window_position_is_visible(
     const AppSettings *settings
@@ -362,6 +368,11 @@ int main(void)
             debug_visible = !debug_visible;
         }
 
+        /* 
+         * OBS Hide keeps the window mapped and rendering. 
+         * save the real position before moving it almost completely off-screen. 
+         */
+
         if (
             !settings_visible &&
             IsKeyPressed(KEY_F10)
@@ -482,6 +493,10 @@ int main(void)
             );
         }
 
+        /* 
+         * do not learn the temporary F10 position as the normal window position. 
+         */
+
         if (
             !obs_hide_mode &&
             !IsWindowMinimized()
@@ -571,6 +586,11 @@ int main(void)
             tosu->checksum[0] != '\0'
         )
         {
+            /* 
+             * the checksum is our map generation. 
+             * anything derived from the previous checksum is stale as soon as this changes. 
+             */
+
             if (strcmp(wanted_checksum, tosu->checksum) != 0)
             {
                 snprintf(
@@ -690,6 +710,11 @@ int main(void)
             )
         )
         {
+            /* 
+             * structural family features stay at base timing. 
+             * changing clock rate should change difficulty, not what kind of chart it is. 
+             */
+
             if (
                 AnalysisMapBuild(
                     &beatmap,
@@ -984,6 +1009,11 @@ int main(void)
                 loaded_checksum
             ) == 0;
 
+        /* 
+         * rate sliders can update several times in a few frames. 
+         * the analysis map follows immediately, but Sunny waits briefly for the rate to settle. 
+         */
+
         if (
             analysis_ready &&
             sunny_pending &&
@@ -1062,11 +1092,11 @@ int main(void)
         if (sunny_has_result)
         {
             if (
-                sunny.star_rating < 7.0 &&
+                sunny.star_rating < MANIA4K_CALIBRATION.family.rhythm_profile_sr_ceiling &&
                 rhythm_matches_current
             )
             {
-                if (rhythm_profile.confidence >= 0.10)
+                if (rhythm_profile.confidence >= MANIA4K_CALIBRATION.family.rhythm_profile_confidence_floor)
                 {
                     classification_ready = true;
 
@@ -1109,7 +1139,7 @@ int main(void)
                 }
             }
             else if (
-                sunny.star_rating >= 7.0 &&
+                sunny.star_rating >= MANIA4K_CALIBRATION.family.rhythm_profile_sr_ceiling &&
                 features_match_current
             )
             {

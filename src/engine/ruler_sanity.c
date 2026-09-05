@@ -1,4 +1,5 @@
 #include "engine/ruler_sanity.h"
+#include "calibration/mania4k_calibration.h"
 
 #include <math.h>
 #include <string.h>
@@ -121,24 +122,10 @@ static double promotion_confidence_floor(
     ReformRuler ruler
 )
 {
-    switch (ruler)
-    {
-        case REFORM_RULER_JACK:
-            return 0.28;
+    if (ruler < 0 || ruler >= REFORM_RULER_COUNT)
+        return 1.0;
 
-        case REFORM_RULER_SPEED:
-            return 0.32;
-
-        case REFORM_RULER_STAMINA:
-            return 0.34;
-
-        case REFORM_RULER_TECH:
-            return 0.35;
-
-        case REFORM_RULER_GENERAL:
-        default:
-            return 1.0;
-    }
+    return MANIA4K_CALIBRATION.ruler_sanity.promotion_confidence[ruler];
 }
 
 
@@ -146,24 +133,10 @@ static double promotion_ratio_floor(
     ReformRuler ruler
 )
 {
-    switch (ruler)
-    {
-        case REFORM_RULER_JACK:
-            return 1.08;
+    if (ruler < 0 || ruler >= REFORM_RULER_COUNT)
+        return INFINITY;
 
-        case REFORM_RULER_SPEED:
-            return 1.07;
-
-        case REFORM_RULER_STAMINA:
-            return 1.08;
-
-        case REFORM_RULER_TECH:
-            return 1.10;
-
-        case REFORM_RULER_GENERAL:
-        default:
-            return INFINITY;
-    }
+    return MANIA4K_CALIBRATION.ruler_sanity.promotion_ratio[ruler];
 }
 
 
@@ -171,18 +144,26 @@ static double veto_ratio_floor(
     double family_confidence
 )
 {
-    if (family_confidence < 0.60)
-        return 1.18;
+    const Mania4KRulerSanityCalibration *cal =
+        &MANIA4K_CALIBRATION.ruler_sanity;
 
-    if (family_confidence < 0.70)
-        return 1.24;
+    if (family_confidence < cal->veto_confidence_breaks[0])
+        return cal->veto_ratio_floors[0];
 
-    if (family_confidence < 0.80)
-        return 1.32;
+    if (family_confidence < cal->veto_confidence_breaks[1])
+        return cal->veto_ratio_floors[1];
+
+    if (family_confidence < cal->veto_confidence_breaks[2])
+        return cal->veto_ratio_floors[2];
 
     return INFINITY;
 }
 
+
+/* 
+ * MinaCalc is a second opinion here. 
+ * it may promote GENERAL when both systems agree, or veto a weak ruler back to GENERAL, but it never swaps skill rulers. 
+ */
 
 bool RulerSanityEvaluate(
     ReformRuler requested_ruler,
@@ -365,7 +346,7 @@ bool RulerSanityEvaluate(
                 family_confidence
             ) &&
         out_result->top_to_second_ratio >=
-            1.06
+            MANIA4K_CALIBRATION.ruler_sanity.veto_top_to_second_floor
     )
     {
         out_result->final_ruler =
@@ -388,16 +369,8 @@ const char *RulerSanityActionName(
     RulerSanityAction action
 )
 {
-    switch (action)
-    {
-        case RULER_SANITY_PROMOTE:
-            return "PROMOTE";
+    if (action < 0 || action >= MANIA4K_RULER_SANITY_ACTION_COUNT)
+        return "KEEP";
 
-        case RULER_SANITY_VETO:
-            return "VETO";
-
-        case RULER_SANITY_KEEP:
-        default:
-            return "KEEP";
-    }
+    return MANIA4K_CALIBRATION.ruler_sanity.action_names[action];
 }

@@ -222,6 +222,8 @@ add_executable(
     src/beatmap/beatmap_fetch.c
     src/beatmap/osu_parser.c
 
+    src/calibration/mania4k_calibration.c
+
     src/engine/analysis_map.c
     src/engine/chart_features.c
     src/engine/family_classifier.c

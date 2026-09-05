@@ -1,4 +1,5 @@
 #include "ln_profile.h"
+#include "calibration/mania4k_calibration.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -34,6 +35,11 @@ static void sort_traits(
     }
 }
 
+/* 
+ * this profile only chooses player-facing LN descriptors and prominent traits.
+ * it has no path back into LN Course stage or DP calculation. 
+ */
+
 bool LnPlayerProfileBuild(
     const ChartFeatures *features,
     LnPlayerProfile *out_profile
@@ -51,31 +57,49 @@ bool LnPlayerProfileBuild(
     if (!features || features->hold_count == 0)
         return false;
 
+    const Mania4KLnProfileCalibration *cal =
+        &MANIA4K_CALIBRATION.ln_profile;
+
     LnProfileTraitValue values[LN_PROFILE_TRAIT_COUNT] =
     {
         {
             LN_PROFILE_TRAIT_OCCUPANCY,
-            clamp01((features->hold_occupancy - 0.45) / 0.50),
+            clamp01(
+                (features->hold_occupancy - cal->trait_low[LN_PROFILE_TRAIT_OCCUPANCY]) /
+                cal->trait_span[LN_PROFILE_TRAIT_OCCUPANCY]
+            ),
             features->hold_occupancy
         },
         {
             LN_PROFILE_TRAIT_RELEASE_DENSITY,
-            clamp01((features->release_density - 1.5) / 7.0),
+            clamp01(
+                (features->release_density - cal->trait_low[LN_PROFILE_TRAIT_RELEASE_DENSITY]) /
+                cal->trait_span[LN_PROFILE_TRAIT_RELEASE_DENSITY]
+            ),
             features->release_density
         },
         {
             LN_PROFILE_TRAIT_HOLD_OVERLAP,
-            clamp01((features->simultaneous_hold - 0.08) / 0.45),
+            clamp01(
+                (features->simultaneous_hold - cal->trait_low[LN_PROFILE_TRAIT_HOLD_OVERLAP]) /
+                cal->trait_span[LN_PROFILE_TRAIT_HOLD_OVERLAP]
+            ),
             features->simultaneous_hold
         },
         {
             LN_PROFILE_TRAIT_DURATION_VARIATION,
-            clamp01((features->ln_duration_cv - 0.20) / 0.80),
+            clamp01(
+                (features->ln_duration_cv - cal->trait_low[LN_PROFILE_TRAIT_DURATION_VARIATION]) /
+                cal->trait_span[LN_PROFILE_TRAIT_DURATION_VARIATION]
+            ),
             features->ln_duration_cv
         },
         {
             LN_PROFILE_TRAIT_HOLD_CHORDS,
-            clamp01((features->hold_chord_ratio - 0.08) / 0.50),
+            clamp01(
+                (features->hold_chord_ratio - cal->trait_low[LN_PROFILE_TRAIT_HOLD_CHORDS]) /
+                cal->trait_span[LN_PROFILE_TRAIT_HOLD_CHORDS]
+            ),
             features->hold_chord_ratio
         }
     };
@@ -96,27 +120,12 @@ const char *LnPlayerProfileTraitName(
     LnProfileTrait trait
 )
 {
-    switch (trait)
-    {
-        case LN_PROFILE_TRAIT_OCCUPANCY:
-            return "Occupancy";
+    if (trait < 0 || trait >= LN_PROFILE_TRAIT_COUNT)
+        return "LN";
 
-        case LN_PROFILE_TRAIT_RELEASE_DENSITY:
-            return "Release";
-
-        case LN_PROFILE_TRAIT_HOLD_OVERLAP:
-            return "Overlap";
-
-        case LN_PROFILE_TRAIT_DURATION_VARIATION:
-            return "Duration CV";
-
-        case LN_PROFILE_TRAIT_HOLD_CHORDS:
-            return "Hold chords";
-
-        default:
-            return "LN";
-    }
+    return MANIA4K_CALIBRATION.ln_profile.trait_names[trait];
 }
+
 
 void LnPlayerProfileFormatTrait(
     const LnProfileTraitValue *trait,
@@ -135,11 +144,15 @@ void LnPlayerProfileFormatTrait(
     const char *name =
         LnPlayerProfileTraitName(trait->trait);
 
-    switch (trait->trait)
+    if (trait->trait < 0 || trait->trait >= LN_PROFILE_TRAIT_COUNT)
     {
-        case LN_PROFILE_TRAIT_OCCUPANCY:
-        case LN_PROFILE_TRAIT_HOLD_OVERLAP:
-        case LN_PROFILE_TRAIT_HOLD_CHORDS:
+        snprintf(output, output_size, "%s", name);
+        return;
+    }
+
+    switch (MANIA4K_CALIBRATION.ln_profile.trait_formats[trait->trait])
+    {
+        case MANIA4K_LN_TRAIT_FORMAT_PERCENT:
             snprintf(
                 output,
                 output_size,
@@ -149,7 +162,7 @@ void LnPlayerProfileFormatTrait(
             );
             break;
 
-        case LN_PROFILE_TRAIT_RELEASE_DENSITY:
+        case MANIA4K_LN_TRAIT_FORMAT_RATE:
             snprintf(
                 output,
                 output_size,
@@ -159,22 +172,14 @@ void LnPlayerProfileFormatTrait(
             );
             break;
 
-        case LN_PROFILE_TRAIT_DURATION_VARIATION:
+        case MANIA4K_LN_TRAIT_FORMAT_DECIMAL:
+        default:
             snprintf(
                 output,
                 output_size,
                 "%s %.2f",
                 name,
                 trait->raw_value
-            );
-            break;
-
-        default:
-            snprintf(
-                output,
-                output_size,
-                "%s",
-                name
             );
             break;
     }

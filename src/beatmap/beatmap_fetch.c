@@ -47,6 +47,11 @@ void BeatmapFetchShutdown(void)
     LocalHttpShutdown();
 }
 
+/* 
+ * fetch the exact map Tosu says is active instead of trying to locate lazer storage ourselves. 
+ * the checksum in main.c decides when this needs refreshing. 
+ */
+
 bool BeatmapFetchCurrent(
     Beatmap *out_map,
     char *error,

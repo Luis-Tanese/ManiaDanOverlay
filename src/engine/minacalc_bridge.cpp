@@ -262,6 +262,11 @@ extern "C" bool MinaCalcLoadBeatmap(
         return false;
     }
 
+    /* 
+     * MinaCalc NoteInfo has no LN release event. 
+     * feed note heads only, then merge simultaneous heads into the four-bit row mask it expects. 
+     */
+
     std::vector<RowBuild> objects;
     objects.reserve(beatmap->note_count);
 

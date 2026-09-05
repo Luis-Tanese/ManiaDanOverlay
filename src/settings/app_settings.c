@@ -264,6 +264,11 @@ bool AppSettingsGetPath(
     );
 }
 
+/* 
+ * defaults are applied first. 
+ * missing fields from older settings files therefore migrate naturally without a separate migration table for every version. 
+ */
+
 bool AppSettingsLoad(
     AppSettings *settings,
     char *error,
@@ -466,6 +471,9 @@ bool AppSettingsSave(
     {
         return false;
     }
+
+    /* Write a complete temporary file first. A failed save should never leave
+       settings.json half-written. */
 
     char temporary_path[SETTINGS_PATH_CAPACITY + 8];
 

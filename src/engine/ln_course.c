@@ -1,36 +1,9 @@
 #include "ln_course.h"
+#include "calibration/mania4k_calibration.h"
 
 #include <math.h>
 #include <stddef.h>
 #include <string.h>
-
-static const double LN_GLOBAL_SR_MEANS[LN_STAGE_COUNT] =
-{
-    1.3050,
-    2.1515,
-    2.8504,
-    2.8504,
-    3.2971,
-    3.2971,
-    3.8084,
-    3.9410,
-    4.5798,
-    5.0721,
-    5.3570,
-    5.7562,
-    6.4753,
-    6.8382,
-    7.1861,
-    7.5488
-};
-
-static const double W_DP_SR = 0.768445;
-static const double W_HOLD_OCCUPANCY = 0.579175;
-static const double W_SIMULTANEOUS_HOLD = 5.109795;
-static const double W_RELEASE_DENSITY = 0.324758;
-static const double W_LN_DURATION_CV = 0.224097;
-static const double W_DP_SR_X_HOLD = -0.265177;
-static const double W_BIAS = -3.189884;
 
 static double clampd(
     double value,
@@ -53,14 +26,18 @@ static void build_monotonic_means(
 {
     memcpy(
         output,
-        LN_GLOBAL_SR_MEANS,
-        sizeof(LN_GLOBAL_SR_MEANS)
+        MANIA4K_CALIBRATION.ln_course.stage_sr_means,
+        sizeof(MANIA4K_CALIBRATION.ln_course.stage_sr_means)
     );
 
     for (size_t i = 1; i < LN_STAGE_COUNT; ++i)
     {
         if (output[i] <= output[i - 1])
-            output[i] = output[i - 1] + 0.001;
+        {
+            output[i] =
+                output[i - 1] +
+                MANIA4K_CALIBRATION.ln_course.monotonic_epsilon;
+        }
     }
 }
 
@@ -68,6 +45,9 @@ static double sr_to_dp(
     double sr
 )
 {
+    const Mania4KLnCourseCalibration *cal =
+        &MANIA4K_CALIBRATION.ln_course;
+
     double means[LN_STAGE_COUNT];
     build_monotonic_means(means);
 
@@ -103,10 +83,10 @@ static double sr_to_dp(
     }
 
     if (sr < lower[0])
-        return 1.0;
+        return cal->minimum_dp;
 
     if (sr >= upper[LN_STAGE_COUNT - 1])
-        return 16.99;
+        return cal->maximum_dp;
 
     for (size_t i = 0; i < LN_STAGE_COUNT; ++i)
     {
@@ -126,7 +106,7 @@ static double sr_to_dp(
         }
     }
 
-    return 1.0;
+    return cal->minimum_dp;
 }
 
 static double regression_dp(
@@ -134,6 +114,9 @@ static double regression_dp(
     const ChartFeatures *features
 )
 {
+    const Mania4KLnRegressionCalibration *cal =
+        &MANIA4K_CALIBRATION.ln_course.regression;
+
     const double hold_occupancy =
         features ? features->hold_occupancy : 0.0;
 
@@ -147,14 +130,14 @@ static double regression_dp(
         features ? features->ln_duration_cv : 0.0;
 
     return
-        W_DP_SR * dp_sr +
-        W_HOLD_OCCUPANCY * hold_occupancy +
-        W_SIMULTANEOUS_HOLD * simultaneous_hold +
-        W_RELEASE_DENSITY * release_density +
-        W_LN_DURATION_CV * ln_duration_cv +
-        W_DP_SR_X_HOLD *
+        cal->dp_sr * dp_sr +
+        cal->hold_occupancy * hold_occupancy +
+        cal->simultaneous_hold * simultaneous_hold +
+        cal->release_density * release_density +
+        cal->ln_duration_cv * ln_duration_cv +
+        cal->dp_sr_x_hold *
             (dp_sr * hold_occupancy) +
-        W_BIAS;
+        cal->bias;
 }
 
 static double confidence_from_dp(
@@ -191,18 +174,20 @@ static LnSublevel sublevel_from_dp(
     double dp
 )
 {
-    double fraction = dp - floor(dp);
+    const double fraction = dp - floor(dp);
+    const double *edges =
+        MANIA4K_CALIBRATION.ln_course.sublevel_edges;
 
-    if (fraction <= 0.20)
+    if (fraction <= edges[0])
         return LN_SUBLEVEL_LOW;
 
-    if (fraction <= 0.40)
+    if (fraction <= edges[1])
         return LN_SUBLEVEL_MID_LOW;
 
-    if (fraction <= 0.60)
+    if (fraction <= edges[2])
         return LN_SUBLEVEL_MID;
 
-    if (fraction <= 0.80)
+    if (fraction <= edges[3])
         return LN_SUBLEVEL_MID_HIGH;
 
     return LN_SUBLEVEL_HIGH;
@@ -214,24 +199,28 @@ bool LnCourseShouldRoute(
 {
     return
         features &&
-        features->ln_ratio > 0.45;
+        features->ln_ratio > MANIA4K_CALIBRATION.ln_course.route_ln_ratio;
 }
 
 static double normalize_signal(
     double value,
-    double low,
-    double high
+    Mania4KSignalRange range
 )
 {
-    if (high <= low)
+    if (range.high <= range.low)
         return 0.0;
 
     return clampd(
-        (value - low) / (high - low),
+        (value - range.low) / (range.high - range.low),
         0.0,
         1.0
     );
 }
+
+/* 
+ * LN family is descriptive. 
+ * it is kept separate from the stage regression so changing labels cannot silently change LN Course DP. 
+ */
 
 LnFamily LnCourseClassifyFamily(
     const ChartFeatures *features
@@ -240,158 +229,150 @@ LnFamily LnCourseClassifyFamily(
     if (!features)
         return LN_FAMILY_ALLROUND;
 
+    const Mania4KLnCourseCalibration *cal =
+        &MANIA4K_CALIBRATION.ln_course;
+
+    const Mania4KLnFamilyCalibration *family =
+        &cal->family;
+
     const double release =
         normalize_signal(
             features->release_density,
-            2.0,
-            10.0
+            cal->release_density
         );
 
     const double density =
         normalize_signal(
             features->nps_p90,
-            10.0,
-            32.0
+            cal->density
         );
 
     const double stamina =
         normalize_signal(
             features->stamina_index,
-            0.35,
-            0.92
+            cal->stamina
         );
 
     const double overlap =
         normalize_signal(
             features->simultaneous_hold,
-            0.10,
-            0.58
+            cal->overlap
         );
 
     const double occupancy =
         normalize_signal(
             features->hold_occupancy,
-            0.50,
-            0.97
+            cal->occupancy
         );
 
     const double hold_chords =
         normalize_signal(
             features->hold_chord_ratio,
-            0.10,
-            0.55
+            cal->hold_chords
         );
 
     const double duration_variation =
         normalize_signal(
             features->ln_duration_cv,
-            0.22,
-            1.05
+            cal->duration_variation
         );
 
     const double timing_irregularity =
         normalize_signal(
             features->timing_irregularity,
-            0.25,
-            1.45
+            cal->timing_irregularity
         );
 
     const double transition_complexity =
         normalize_signal(
             features->transition_var,
-            0.30,
-            0.98
+            cal->transition_complexity
         );
 
     const double pattern_irregularity =
         normalize_signal(
             features->pattern_irregularity,
-            0.03,
-            0.35
+            cal->pattern_irregularity
         );
 
     const double jack_structure =
         normalize_signal(
             features->jack_density,
-            0.06,
-            0.48
+            cal->jack_structure
         );
 
     const double minijack_structure =
         normalize_signal(
             features->minijack_ratio,
-            0.03,
-            0.28
+            cal->minijack_structure
         );
 
     double speed_score =
-        0.38 * sqrt(release * density) +
-        0.24 * density +
-        0.20 * stamina +
-        0.12 * release +
-        0.06 * (1.0 - overlap);
+        family->speed_release_density_interaction * sqrt(release * density) +
+        family->speed_density * density +
+        family->speed_stamina * stamina +
+        family->speed_release * release +
+        family->speed_no_overlap * (1.0 - overlap);
 
     speed_score *=
         1.0 -
-        0.16 * overlap -
-        0.10 * hold_chords;
+        family->speed_overlap_penalty * overlap -
+        family->speed_hold_chord_penalty * hold_chords;
 
     const double wall_partner =
         fmax(
             hold_chords,
-            occupancy * 0.72
+            occupancy * family->wall_occupancy_partner
         );
 
     const double wall_core =
-        sqrt(
-            overlap * wall_partner
-        );
+        sqrt(overlap * wall_partner);
 
     double inverse_score =
-        0.56 * wall_core +
-        0.22 * overlap +
-        0.14 * hold_chords +
-        0.08 * occupancy;
+        family->inverse_wall_core * wall_core +
+        family->inverse_overlap * overlap +
+        family->inverse_hold_chords * hold_chords +
+        family->inverse_occupancy * occupancy;
 
     double technical_score =
-        0.24 * duration_variation +
-        0.20 * timing_irregularity +
-        0.18 * transition_complexity +
-        0.14 * jack_structure +
-        0.10 * minijack_structure +
-        0.08 * pattern_irregularity +
-        0.06 * (1.0 - overlap);
+        family->technical_duration_variation * duration_variation +
+        family->technical_timing_irregularity * timing_irregularity +
+        family->technical_transition_complexity * transition_complexity +
+        family->technical_jack_structure * jack_structure +
+        family->technical_minijack_structure * minijack_structure +
+        family->technical_pattern_irregularity * pattern_irregularity +
+        family->technical_no_overlap * (1.0 - overlap);
 
     if (
-        release < 0.30 ||
-        density < 0.28
+        release < family->speed_release_floor ||
+        density < family->speed_density_floor
     )
     {
-        speed_score *= 0.58;
+        speed_score *= family->speed_weak_multiplier;
     }
 
     const bool inverse_has_overlap =
-        features->simultaneous_hold >= 0.22;
+        features->simultaneous_hold >= family->inverse_overlap_floor;
 
     const bool inverse_has_partner =
-        features->hold_chord_ratio >= 0.18 ||
-        features->hold_occupancy >= 0.84;
+        features->hold_chord_ratio >= family->inverse_hold_chord_floor ||
+        features->hold_occupancy >= family->inverse_occupancy_partner_floor;
 
     if (
         !inverse_has_overlap ||
         !inverse_has_partner
     )
     {
-        inverse_score *= 0.42;
+        inverse_score *= family->inverse_missing_structure_multiplier;
     }
 
     if (
-        features->hold_occupancy >= 0.82 &&
-        features->simultaneous_hold < 0.24 &&
-        features->hold_chord_ratio < 0.20
+        features->hold_occupancy >= family->occupancy_only_floor &&
+        features->simultaneous_hold < family->occupancy_only_overlap_ceiling &&
+        features->hold_chord_ratio < family->occupancy_only_chord_ceiling
     )
     {
-        inverse_score *= 0.55;
+        inverse_score *= family->occupancy_only_multiplier;
     }
 
     if (
@@ -404,18 +385,21 @@ LnFamily LnCourseClassifyFamily(
                     transition_complexity
                 )
             )
-        ) < 0.30
+        ) < family->technical_signal_floor
     )
     {
-        technical_score *= 0.60;
+        technical_score *= family->technical_weak_multiplier;
     }
 
     if (
-        duration_variation >= 0.45 &&
-        (jack_structure >= 0.35 || transition_complexity >= 0.42)
+        duration_variation >= family->technical_duration_bonus_floor &&
+        (
+            jack_structure >= family->technical_jack_bonus_floor ||
+            transition_complexity >= family->technical_transition_bonus_floor
+        )
     )
     {
-        technical_score += 0.08;
+        technical_score += family->technical_bonus;
     }
 
     LnFamily best_family =
@@ -461,8 +445,8 @@ LnFamily LnCourseClassifyFamily(
     }
 
     if (
-        best_score < 0.55 ||
-        (best_score - second_score) < 0.075
+        best_score < family->family_score_floor ||
+        (best_score - second_score) < family->family_margin_floor
     )
     {
         return LN_FAMILY_ALLROUND;
@@ -470,6 +454,11 @@ LnFamily LnCourseClassifyFamily(
 
     return best_family;
 }
+
+/* 
+ * the rating path is Sunny-derived DP plus the LN regression. 
+ * MinaCalc remains display evidence and does not feed the course score. 
+ */
 
 bool LnCourseEvaluate(
     double sunny_sr,
@@ -497,6 +486,9 @@ bool LnCourseEvaluate(
         return false;
     }
 
+    const Mania4KLnCourseCalibration *cal =
+        &MANIA4K_CALIBRATION.ln_course;
+
     const double base_dp =
         sr_to_dp(sunny_sr);
 
@@ -509,13 +501,13 @@ bool LnCourseEvaluate(
     corrected =
         clampd(
             corrected,
-            1.0,
-            16.99
+            cal->minimum_dp,
+            cal->maximum_dp
         );
 
     out_result->valid = true;
     out_result->beyond =
-        corrected > 16.99;
+        corrected > cal->maximum_dp;
 
     out_result->stage =
         stage_from_dp(corrected);
@@ -540,26 +532,6 @@ const char *LnCourseStageName(
     LnStage stage
 )
 {
-    static const char *NAMES[LN_STAGE_COUNT] =
-    {
-        "1ST",
-        "2ND",
-        "3RD",
-        "4TH",
-        "5TH",
-        "6TH",
-        "7TH",
-        "8TH",
-        "9TH",
-        "10TH",
-        "YOAKE",
-        "YUUGURE",
-        "YORU",
-        "YAMI",
-        "YUME",
-        "YOKAZE"
-    };
-
     if (
         stage < 0 ||
         stage >= LN_STAGE_COUNT
@@ -568,54 +540,25 @@ const char *LnCourseStageName(
         return "LN";
     }
 
-    return NAMES[stage];
+    return MANIA4K_CALIBRATION.ln_course.stage_names[stage];
 }
 
 const char *LnCourseFamilyName(
     LnFamily family
 )
 {
-    switch (family)
-    {
-        case LN_FAMILY_ALLROUND:
-            return "All-round LN";
+    if (family < 0 || family >= MANIA4K_LN_FAMILY_COUNT)
+        return "LN";
 
-        case LN_FAMILY_JACK_TECHNICAL:
-            return "Jack / Technical LN";
-
-        case LN_FAMILY_INVERSE:
-            return "Inverse / Wall LN";
-
-        case LN_FAMILY_SPEED_DENSITY:
-            return "Speed / Density LN";
-
-        default:
-            return "LN";
-    }
+    return MANIA4K_CALIBRATION.ln_course.family_names[family];
 }
 
 const char *LnCourseSublevelName(
     LnSublevel sublevel
 )
 {
-    switch (sublevel)
-    {
-        case LN_SUBLEVEL_LOW:
-            return "LOW";
+    if (sublevel < 0 || sublevel >= MANIA4K_SUBLEVEL_COUNT)
+        return "MID";
 
-        case LN_SUBLEVEL_MID_LOW:
-            return "MID-LOW";
-
-        case LN_SUBLEVEL_MID:
-            return "MID";
-
-        case LN_SUBLEVEL_MID_HIGH:
-            return "MID-HIGH";
-
-        case LN_SUBLEVEL_HIGH:
-            return "HIGH";
-
-        default:
-            return "MID";
-    }
+    return MANIA4K_CALIBRATION.ln_course.sublevel_names[sublevel];
 }

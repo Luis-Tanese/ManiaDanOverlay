@@ -1,4 +1,5 @@
 #include "family_classifier.h"
+#include "calibration/mania4k_calibration.h"
 
 #include <math.h>
 #include <stddef.h>
@@ -135,6 +136,9 @@ static void classify_tech_subtype(
     if (!sunny || !features || !out_subtype || !out_confidence)
         return;
 
+    const Mania4KTechSubtypeCalibration *cal =
+        &MANIA4K_CALIBRATION.family.tech_subtype;
+
     const double transition_var = features->transition_var;
     const double density_cv = features->density_cv;
     const double jump_ratio = features->jump_ratio;
@@ -159,29 +163,30 @@ static void classify_tech_subtype(
             : 0.0;
 
     const double chaos_score =
-        transition_var * 42.0 +
-        density_cv * 26.0 +
-        nps_active_cv * 20.0 +
-        tech_dom * 18.0 -
-        anchor_ratio * 10.0;
+        transition_var * cal->chaos_transition +
+        density_cv * cal->chaos_density_cv +
+        nps_active_cv * cal->chaos_nps_active_cv +
+        tech_dom * cal->chaos_tech_dom -
+        anchor_ratio * cal->chaos_anchor;
 
     const double control_score =
-        hand_ratio * 45.0 +
-        jump_ratio * 10.0 +
-        chord_complexity * 12.0 +
-        tech_dom * 15.0 +
-        max_double(0.0, 1.0 - density_cv) * 8.0 +
-        anchor_ratio * 6.0;
+        hand_ratio * cal->control_hand +
+        jump_ratio * cal->control_jump +
+        chord_complexity * cal->control_chord_complexity +
+        tech_dom * cal->control_tech_dom +
+        max_double(0.0, 1.0 - density_cv) * cal->control_density_regularity +
+        anchor_ratio * cal->control_anchor;
 
     const double hybrid_score =
-        tech_dom * 22.0 +
-        jump_ratio * 14.0 +
-        density_cv * 10.0 +
-        transition_var * 10.0 +
+        tech_dom * cal->hybrid_tech_dom +
+        jump_ratio * cal->hybrid_jump +
+        density_cv * cal->hybrid_density_cv +
+        transition_var * cal->hybrid_transition +
         max_double(
             0.0,
-            0.9 - fabs(stream_purity - 0.45)
-        ) * 5.0;
+            cal->hybrid_stream_width -
+            fabs(stream_purity - cal->hybrid_stream_center)
+        ) * cal->hybrid_stream_weight;
 
     TechScore ranked[3] =
     {
@@ -203,16 +208,16 @@ static void classify_tech_subtype(
 
     double confidence = clamp_double(
         (top_score - second_score) /
-        max_double(total * 0.18, 1.0),
-        0.15,
+        max_double(total * cal->confidence_scale, 1.0),
+        cal->confidence_min,
         1.0
     );
 
     TechSubtype subtype = ranked[0].subtype;
 
-    const double chaos_transition_floor = 0.38;
-    const double control_hand_floor = 0.10;
-    const double control_chord_floor = 0.18;
+    const double chaos_transition_floor = cal->chaos_transition_floor;
+    const double control_hand_floor = cal->control_hand_floor;
+    const double control_chord_floor = cal->control_chord_floor;
 
     if (
         subtype == TECH_SUBTYPE_CHAOS &&
@@ -220,7 +225,7 @@ static void classify_tech_subtype(
     )
     {
         subtype = TECH_SUBTYPE_HYBRID;
-        confidence = min_double(confidence, 0.45);
+        confidence = min_double(confidence, cal->confidence_fallback_cap);
     }
     else if (
         subtype == TECH_SUBTYPE_CONTROL &&
@@ -229,7 +234,7 @@ static void classify_tech_subtype(
     )
     {
         subtype = TECH_SUBTYPE_HYBRID;
-        confidence = min_double(confidence, 0.45);
+        confidence = min_double(confidence, cal->confidence_fallback_cap);
     }
 
     *out_subtype = subtype;
@@ -241,29 +246,10 @@ const char *ChartFamilyName(
     ChartFamily family
 )
 {
-    switch (family)
-    {
-        case CHART_FAMILY_STREAM:
-            return "STREAM";
+    if (family < 0 || family >= CHART_FAMILY_COUNT)
+        return "UNKNOWN";
 
-        case CHART_FAMILY_JACK:
-            return "JACK";
-
-        case CHART_FAMILY_TECH:
-            return "TECH";
-
-        case CHART_FAMILY_SPEED:
-            return "SPEED";
-
-        case CHART_FAMILY_STAMINA:
-            return "STAMINA";
-
-        case CHART_FAMILY_HYBRID:
-            return "HYBRID";
-
-        default:
-            return "UNKNOWN";
-    }
+    return MANIA4K_CALIBRATION.family.family_names[family];
 }
 
 
@@ -271,21 +257,10 @@ const char *TechSubtypeName(
     TechSubtype subtype
 )
 {
-    switch (subtype)
-    {
-        case TECH_SUBTYPE_CHAOS:
-            return "CHAOS TECH";
+    if (subtype < 0 || subtype >= MANIA4K_TECH_SUBTYPE_COUNT)
+        return "GENERIC";
 
-        case TECH_SUBTYPE_CONTROL:
-            return "CONTROL TECH";
-
-        case TECH_SUBTYPE_HYBRID:
-            return "HYBRID TECH";
-
-        case TECH_SUBTYPE_GENERIC:
-        default:
-            return "GENERIC";
-    }
+    return MANIA4K_CALIBRATION.family.tech_subtype_names[subtype];
 }
 
 
@@ -298,6 +273,9 @@ bool FamilyClassifierEvaluate(
 {
     if (!sunny || !features || !out_result)
         return false;
+
+    const Mania4KFamilyCalibration *cal =
+        &MANIA4K_CALIBRATION.family;
 
     memset(out_result, 0, sizeof(*out_result));
 
@@ -330,7 +308,7 @@ bool FamilyClassifierEvaluate(
     const double jack_ratio_broad = features->jack_ratio;
     const double jack_density = features->jack_density;
     const double vibro_density = features->vibro_density;
-    const double density_cv = min_double(2.0, features->density_cv);
+    const double density_cv = min_double(cal->density_cv_cap, features->density_cv);
     const double transition_var = features->transition_var;
     const double jump_ratio = features->jump_ratio;
     const double hand_ratio = features->hand_ratio;
@@ -355,25 +333,25 @@ bool FamilyClassifierEvaluate(
 
     const double rep_margin = max_double(
         0.0,
-        0.83 - transition_var
+        cal->repetitive_transition_center - transition_var
     );
 
     const double is_repetitive = min_double(
         1.0,
-        rep_margin * 12.0
+        rep_margin * cal->repetitive_scale
     );
 
-    double jack_baseline = 0.3;
+    double jack_baseline = cal->jack_baseline_default;
 
     if (bpm > 0.0)
     {
         const double quarter_ms = 60000.0 / bpm;
 
         jack_baseline = min_double(
-            0.9,
+            cal->jack_baseline_max,
             max_double(
                 0.0,
-                1.0 - quarter_ms / 250.0
+                1.0 - quarter_ms / cal->jack_quarter_ms_scale
             )
         );
     }
@@ -384,49 +362,52 @@ bool FamilyClassifierEvaluate(
     );
 
     const double bpm_signal = min_double(
-        1.5,
-        max_double(0.0, bpm - 140.0) / 80.0
+        cal->bpm_signal_cap,
+        max_double(0.0, bpm - cal->bpm_signal_start) / cal->bpm_signal_span
     );
 
     const double jack_score =
-        is_repetitive * 50.0 +
-        jack_density * 45.0 +
-        chord_fraction * 20.0 +
-        jack_excess * 15.0 +
-        vibro_density * 20.0 +
-        anchor_ratio * 15.0 +
-        jack_dom * 10.0;
+        is_repetitive * cal->jack_weight_repetitive +
+        jack_density * cal->jack_weight_density +
+        chord_fraction * cal->jack_weight_chords +
+        jack_excess * cal->jack_weight_excess +
+        vibro_density * cal->jack_weight_vibro +
+        anchor_ratio * cal->jack_weight_anchor +
+        jack_dom * cal->jack_weight_sunny;
 
     const double stream_score =
-        stream_purity * 45.0 +
-        max_double(0.0, 1.0 - chord_fraction * 3.0) * 15.0 -
-        chord_fraction * 12.0 +
-        stream_dom * 20.0 +
-        max_double(0.0, 1.0 - density_cv) * 15.0 +
-        max_double(0.0, 0.5 - jack_density) * 10.0;
+        stream_purity * cal->stream_weight_purity +
+        max_double(0.0, 1.0 - chord_fraction * cal->stream_chord_suppression_scale) *
+            cal->stream_weight_chord_regularity -
+        chord_fraction * cal->stream_weight_chord_penalty +
+        stream_dom * cal->stream_weight_sunny +
+        max_double(0.0, 1.0 - density_cv) * cal->stream_weight_density_regularity +
+        max_double(0.0, cal->stream_jack_floor - jack_density) *
+            cal->stream_weight_low_jack;
 
     const double tech_score =
-        density_cv * 55.0 +
-        pattern_irregularity * 25.0 +
-        nps_active_cv * 20.0 +
-        tech_dom * 20.0 +
-        transition_var * 12.0 +
-        chord_fraction * 8.0;
+        density_cv * cal->tech_weight_density_cv +
+        pattern_irregularity * cal->tech_weight_pattern_irregularity +
+        nps_active_cv * cal->tech_weight_nps_active_cv +
+        tech_dom * cal->tech_weight_sunny +
+        transition_var * cal->tech_weight_transition +
+        chord_fraction * cal->tech_weight_chords;
 
     const double speed_raw =
-        bpm_signal * 42.0 +
-        stream_purity * 22.0 +
-        max_double(0.0, 1.0 - density_cv) * 10.0 +
-        max_double(0.0, peak_ratio - 1.02) * 12.0;
+        bpm_signal * cal->speed_weight_bpm +
+        stream_purity * cal->speed_weight_purity +
+        max_double(0.0, 1.0 - density_cv) * cal->speed_weight_density_regularity +
+        max_double(0.0, peak_ratio - cal->speed_peak_floor) * cal->speed_weight_peak;
 
     const double speed_chord_gate = max_double(
-        0.25,
-        1.0 - chord_fraction * 1.8
+        cal->speed_chord_gate_min,
+        1.0 - chord_fraction * cal->speed_chord_gate_scale
     );
 
     const double speed_regularity = max_double(
-        0.5,
-        1.0 - max_double(0.0, density_cv - 0.30) * 2.5
+        cal->speed_regularity_min,
+        1.0 - max_double(0.0, density_cv - cal->speed_regularity_density_start) *
+            cal->speed_regularity_scale
     );
 
     const double speed_score =
@@ -435,42 +416,43 @@ bool FamilyClassifierEvaluate(
         speed_regularity;
 
     const double drain_gate =
-        max_double(0.0, drain_s - 60.0) /
-        120.0;
+        max_double(0.0, drain_s - cal->stamina_drain_start) /
+        cal->stamina_drain_span;
 
     const double short_penalty = max_double(
         0.0,
-        1.0 - drain_s / 90.0
+        1.0 - drain_s / cal->stamina_short_duration
     );
 
     const double chord_req = min_double(
         1.0,
-        max_double(0.0, chord_fraction - 0.15) /
-        0.20
+        max_double(0.0, chord_fraction - cal->stamina_chord_req_start) /
+        cal->stamina_chord_req_span
     );
 
     const double stamina_raw =
-        drain_gate * 28.0 +
-        chord_fraction * 25.0 -
-        stream_purity * 20.0 +
-        nps_active_ratio * 12.0 +
-        max_double(0.0, 1.0 - density_cv) * 8.0 +
-        nps_sustained * 0.3 +
-        min_double(1.0, drain_s / 150.0) * 12.0;
+        drain_gate * cal->stamina_weight_drain +
+        chord_fraction * cal->stamina_weight_chords -
+        stream_purity * cal->stamina_weight_stream_penalty +
+        nps_active_ratio * cal->stamina_weight_active_ratio +
+        max_double(0.0, 1.0 - density_cv) * cal->stamina_weight_density_regularity +
+        nps_sustained * cal->stamina_weight_sustained_nps +
+        min_double(1.0, drain_s / cal->stamina_duration_scale) *
+            cal->stamina_weight_duration;
 
     double stamina_score =
         stamina_raw *
         chord_req *
         max_double(
-            0.4,
-            1.0 - short_penalty * 0.5
+            cal->stamina_min_duration_gate,
+            1.0 - short_penalty * cal->stamina_short_penalty_scale
         );
 
-    if (is_repetitive > 0.15)
+    if (is_repetitive > cal->stamina_repetitive_trigger)
     {
         stamina_score *= max_double(
-            0.3,
-            1.0 - is_repetitive * 0.7
+            cal->stamina_repetitive_floor,
+            1.0 - is_repetitive * cal->stamina_repetitive_scale
         );
     }
 
@@ -479,6 +461,11 @@ bool FamilyClassifierEvaluate(
     out_result->tech_score = tech_score;
     out_result->speed_score = speed_score;
     out_result->stamina_score = stamina_score;
+
+    /* 
+     * family scores describe structure. 
+     * low separation is intentionally treated as HYBRID instead of forcing a skill ruler from a weak winner. 
+     */
 
     FamilyScore ranked[5] =
     {
@@ -505,15 +492,15 @@ bool FamilyClassifierEvaluate(
 
     double confidence = min_double(
         1.0,
-        gap / max_double(total * 0.10, 1.0)
+        gap / max_double(total * cal->confidence_scale, 1.0)
     );
 
     ChartFamily family;
 
-    if (confidence < 0.15)
+    if (confidence < cal->hybrid_confidence_floor)
     {
         family = CHART_FAMILY_HYBRID;
-        confidence = max_double(0.1, confidence);
+        confidence = max_double(cal->hybrid_confidence_min, confidence);
     }
     else
     {
@@ -523,41 +510,41 @@ bool FamilyClassifierEvaluate(
     if (
         (family == CHART_FAMILY_HYBRID ||
          family == CHART_FAMILY_STREAM) &&
-        density_cv > 0.35
+        density_cv > cal->tech_rescue_density_cv
     )
     {
         if (
             tech_score > 0.0 &&
             stream_score > 0.0 &&
-            tech_score / stream_score > 0.75
+            tech_score / stream_score > cal->tech_rescue_ratio
         )
         {
             family = CHART_FAMILY_TECH;
-            confidence = max_double(confidence, 0.3);
+            confidence = max_double(confidence, cal->tech_rescue_confidence);
         }
     }
 
     if (
         family == CHART_FAMILY_STREAM &&
-        bpm >= 155.0 &&
-        stream_purity > 0.70 &&
-        chord_fraction < 0.30
+        bpm >= cal->speed_rescue_bpm &&
+        stream_purity > cal->speed_rescue_purity &&
+        chord_fraction < cal->speed_rescue_chord_max
     )
     {
         if (
             speed_score > 0.0 &&
             stream_score > 0.0 &&
-            speed_score / stream_score > 0.35
+            speed_score / stream_score > cal->speed_rescue_ratio
         )
         {
             family = CHART_FAMILY_SPEED;
-            confidence = max_double(confidence, 0.25);
+            confidence = max_double(confidence, cal->speed_rescue_confidence);
         }
     }
 
     if (
         family == CHART_FAMILY_JACK &&
-        sunny->total_notes_eff > 15000
+        sunny->total_notes_eff > cal->long_jack_note_count
     )
     {
         family =
@@ -565,39 +552,39 @@ bool FamilyClassifierEvaluate(
                 ? CHART_FAMILY_STAMINA
                 : CHART_FAMILY_HYBRID;
 
-        confidence = min_double(confidence, 0.5);
+        confidence = min_double(confidence, cal->long_jack_confidence_cap);
     }
 
     if (
         (family == CHART_FAMILY_STREAM ||
          family == CHART_FAMILY_TECH) &&
-        drain_s > 120.0 &&
-        chord_fraction > 0.25
+        drain_s > cal->stamina_rescue_duration &&
+        chord_fraction > cal->stamina_rescue_chord_min
     )
     {
         if (
             stamina_score > 0.0 &&
             stamina_score >
-                max_double(stream_score, tech_score) * 0.85
+                max_double(stream_score, tech_score) * cal->stamina_rescue_ratio
         )
         {
             family = CHART_FAMILY_STAMINA;
-            confidence = max_double(confidence, 0.35);
+            confidence = max_double(confidence, cal->stamina_rescue_confidence);
         }
     }
 
     if (
         family != CHART_FAMILY_TECH &&
         family != CHART_FAMILY_JACK &&
-        timing_irregularity > 0.4
+        timing_irregularity > cal->irregular_tech_timing_min
     )
     {
         if (
-            jack_density > 0.08 &&
-            chord_fraction > 0.15 &&
-            chord_fraction < 0.55 &&
-            stream_purity > 0.40 &&
-            stream_purity < 0.85
+            jack_density > cal->irregular_tech_jack_min &&
+            chord_fraction > cal->irregular_tech_chord_min &&
+            chord_fraction < cal->irregular_tech_chord_max &&
+            stream_purity > cal->irregular_tech_purity_min &&
+            stream_purity < cal->irregular_tech_purity_max
         )
         {
             const double winner_score =
@@ -609,11 +596,11 @@ bool FamilyClassifierEvaluate(
             if (
                 tech_score > 0.0 &&
                 winner_score > 0.0 &&
-                tech_score > winner_score * 0.75
+                tech_score > winner_score * cal->irregular_tech_ratio
             )
             {
                 family = CHART_FAMILY_TECH;
-                confidence = max_double(confidence, 0.35);
+                confidence = max_double(confidence, cal->irregular_tech_confidence);
             }
         }
     }
@@ -625,7 +612,7 @@ bool FamilyClassifierEvaluate(
         family == CHART_FAMILY_TECH ||
         (
             family == CHART_FAMILY_HYBRID &&
-            tech_score >= top_score * 0.85
+            tech_score >= top_score * cal->hybrid_tech_subtype_ratio
         )
     )
     {
@@ -641,6 +628,11 @@ bool FamilyClassifierEvaluate(
 }
 
 
+/* 
+ * a family name is not automatically a ruler decision. 
+ * weak classifications fall back to GENERAL so the specialized calibration stays conservative. 
+ */
+
 ReformRuler FamilyClassifierRuler(
     const FamilyClassification *classification,
     bool *out_uses_skillset
@@ -651,7 +643,7 @@ ReformRuler FamilyClassifierRuler(
 
     if (
         !classification ||
-        classification->confidence < 0.50
+        classification->confidence < MANIA4K_CALIBRATION.family.ruler_confidence_floor
     )
     {
         return REFORM_RULER_GENERAL;

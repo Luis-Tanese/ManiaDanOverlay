@@ -1,4 +1,5 @@
 #include "rhythm_profile.h"
+#include "calibration/mania4k_calibration.h"
 
 #include <math.h>
 #include <stdint.h>
@@ -6,10 +7,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define STABILITY_THRESHOLD_MS 5.0
-#define BPM_CLUSTER_TOLERANCE_MS 5.0
-#define IMPORTANT_CLUSTER_RATIO 0.5
-#define DEFAULT_BEAT_LENGTH_MS 500.0
 
 
 typedef enum
@@ -366,29 +363,10 @@ static double rhythm_weight(
     RhythmKind rhythm
 )
 {
-    switch (rhythm)
-    {
-        case RHYTHM_LINEAR_STREAM:
-            return 1.0 / 3.0;
+    if (rhythm < 0 || rhythm >= RHYTHM_COUNT)
+        return 1.0;
 
-        case RHYTHM_HARMONIC_FLOW:
-            return 0.65;
-
-        case RHYTHM_ANCHOR_BURST:
-            return 0.90;
-
-        case RHYTHM_COORDINATION:
-            return 0.75;
-
-        case RHYTHM_DENSITY:
-            return 0.90;
-
-        case RHYTHM_WILDCARD:
-            return 1.0;
-
-        default:
-            return 1.0;
-    }
+    return MANIA4K_CALIBRATION.rhythm_profile.rhythm_weights[rhythm];
 }
 
 
@@ -1202,7 +1180,7 @@ static bool build_frames(
         {
             .offset_ms = row->time_ms - first_time,
             .ms_per_beat = (row->time_ms - previous_time) * 4.0,
-            .beat_length = DEFAULT_BEAT_LENGTH_MS,
+            .beat_length = MANIA4K_CALIBRATION.rhythm_profile.default_beat_length_ms,
             .raw_mask = row->mask,
             .active_count = mask_popcount(row->mask),
             .jack_count = mask_popcount(row->mask & previous_mask),
@@ -1325,7 +1303,7 @@ static bool extract_textures(
                     fabs(
                         remaining[i].ms_per_beat -
                         mean_mpb
-                    ) >= STABILITY_THRESHOLD_MS
+                    ) >= MANIA4K_CALIBRATION.rhythm_profile.stability_threshold_ms
                 )
                 {
                     is_volatile = true;
@@ -1438,7 +1416,7 @@ static bool cluster_textures(
                     fabs(
                         clusters[c].anchor_mpb -
                         texture->ms_per_beat
-                    ) < BPM_CLUSTER_TOLERANCE_MS
+                    ) < MANIA4K_CALIBRATION.rhythm_profile.bpm_cluster_tolerance_ms
                 )
                 {
                     cluster_index = c;
@@ -1971,7 +1949,7 @@ bool RhythmProfileEvaluate(
         if (
             profiles[i].importance /
             denominator >
-            IMPORTANT_CLUSTER_RATIO
+            MANIA4K_CALIBRATION.rhythm_profile.important_cluster_ratio
         )
         {
             if (important_count < 5)
@@ -2018,7 +1996,7 @@ bool RhythmProfileEvaluate(
         primary->is_volatile ||
         (
             is_hybrid &&
-            primary->bpm < 150
+            primary->bpm < MANIA4K_CALIBRATION.rhythm_profile.hybrid_tech_bpm_ceiling
         ) ||
         subtype_forces_tech(
             primary->dominant_sub
@@ -2044,8 +2022,8 @@ bool RhythmProfileEvaluate(
             family == CHART_FAMILY_SPEED ||
             family == CHART_FAMILY_STREAM
         ) &&
-        beatmap->bpm > 200.0 &&
-        drain_s > 100.0
+        beatmap->bpm > MANIA4K_CALIBRATION.rhythm_profile.stamina_bpm_floor &&
+        drain_s > MANIA4K_CALIBRATION.rhythm_profile.stamina_duration_floor
     )
     {
         family = CHART_FAMILY_STAMINA;
@@ -2154,7 +2132,7 @@ ReformRuler RhythmProfileRuler(
     if (out_uses_skillset)
         *out_uses_skillset = false;
 
-    if (!profile || profile->confidence < 0.50)
+    if (!profile || profile->confidence < MANIA4K_CALIBRATION.rhythm_profile.ruler_confidence_floor)
         return REFORM_RULER_GENERAL;
 
     ReformRuler ruler;

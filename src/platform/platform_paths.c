@@ -290,6 +290,10 @@ bool PlatformConfigFilePath(
     return true;
 }
 
+/* 
+ * AppSettings writes beside the destination first, so the final rename/replace stays on the same filesystem and can be used as the commit step. 
+ */
+
 bool PlatformAtomicReplaceFile(
     const char *temporary_path,
     const char *destination_path,

@@ -32,10 +32,19 @@ typedef int LocalSocket;
 #define LOCAL_SOCKET_ERROR (-1)
 #endif
 
+/* 
+ * this is deliberately a Tosu client, not a general HTTP stack. 
+ * it only talks to loopback:24050, so DNS, TLS, redirects and proxy support do not belong here. 
+ */
+
 #define LOCAL_HTTP_HOST "127.0.0.1"
 #define LOCAL_HTTP_PORT 24050
 #define LOCAL_HTTP_MAX_RESPONSE (64u * 1024u * 1024u)
 #define LOCAL_HTTP_READ_CHUNK 8192u
+
+/* 
+ * Tosu telemetry and beatmap fetching share the same socket runtime. 
+ */
 
 static int g_http_init_count = 0;
 
@@ -618,6 +627,11 @@ static bool chunked_message_complete(
 
     return false;
 }
+
+/* 
+ * stop reading as soon as HTTP framing says the response is complete.
+ * accept both Content-Length and chunked framing so the client is not tied to one. 
+ */
 
 static bool raw_response_complete(
     const unsigned char *data,

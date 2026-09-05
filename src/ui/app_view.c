@@ -318,6 +318,11 @@ static Color translucent(Color color, unsigned char alpha)
     return color;
 }
 
+/* 
+ * one logical UI unit can become less than one screen pixel in a tiny overlay.
+ * density fill uses this step so adjacent columns still meet after scaling. 
+ */
+
 static float physical_pixel_step(void)
 {
     const float scale =
@@ -1540,6 +1545,11 @@ static void draw_nps_graph(const AppViewModel *model, Rectangle bounds)
     double view_start = first_time;
     double view_end = last_time;
 
+    /* 
+    * overview always shows the whole chart. 
+    * focus is a moving time window with the playhead about 35 percent from the left, leaving useful look-ahead. 
+    */
+
     if (model->graph_mode == DENSITY_GRAPH_FOCUS)
     {
         const double playback_rate =
@@ -1597,6 +1607,11 @@ static void draw_nps_graph(const AppViewModel *model, Rectangle bounds)
             model->theme.graph,
             overview_mode ? 86 : 65
         );
+
+    /* 
+    * overview gets display-only smoothing because thousands of 250 ms samples become visually rough when compressed. 
+    * focus keeps the raw shape. 
+    */
 
     if (overview_mode)
     {

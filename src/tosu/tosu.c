@@ -702,6 +702,11 @@ void TosuUpdate(void)
         }
     }
 
+    /* 
+    * Tosu can miss a poll while lazer changes state or maps. 
+    * keep the last good snapshot briefly so the HUD does not flash offline. 
+    */
+
     if (!request_succeeded)
     {
         const double time_since_success =

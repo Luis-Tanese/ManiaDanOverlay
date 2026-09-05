@@ -90,6 +90,11 @@ bool AnalysisMapBuild(
         rate;
 
 
+    /* 
+     * clock rate is represented by time compression. 
+     * apply it to LN releases as well as note heads so hold duration stays physically correct. 
+     */
+
     for (
         size_t i = 0;
         i < source->note_count;

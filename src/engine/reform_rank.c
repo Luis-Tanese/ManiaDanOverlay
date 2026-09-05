@@ -1,199 +1,18 @@
 #include "reform_rank.h"
+#include "calibration/mania4k_calibration.h"
 
 #include <math.h>
 #include <stddef.h>
 #include <string.h>
 
-static const double GENERAL_MEANS[
-    REFORM_TIER_COUNT
-] =
-{
-    2.94,
-    3.23,
-    3.51,
-    4.16,
-    4.71,
-    5.12,
-    5.36,
-    5.83,
-    6.15,
-    6.55,
-
-    6.56,
-    6.94,
-    7.41,
-    7.91,
-    9.03,
-    9.40,
-    10.13,
-    10.74,
-    11.68,
-    12.25
-};
-
-
-static const double JACK_MEANS[
-    REFORM_TIER_COUNT
-] =
-{
-    2.34,
-    2.35,
-    3.17,
-    3.48,
-    3.98,
-    4.75,
-    4.97,
-    5.84,
-    5.85,
-    6.50,
-
-    6.66,
-    6.90,
-    7.28,
-    7.91,
-    9.13,
-    9.35,
-    10.38,
-    10.96,
-    12.27,
-    13.13
-};
-
-
-static const double SPEED_MEANS[
-    REFORM_TIER_COUNT
-] =
-{
-    2.94,
-    3.50,
-    3.78,
-    4.16,
-    4.86,
-    5.29,
-    5.36,
-    5.71,
-    5.98,
-    6.22,
-
-    6.58,
-    6.92,
-    7.23,
-    7.91,
-    9.25,
-    9.55,
-    10.05,
-    10.67,
-    11.16,
-    12.05
-};
-
-
-static const double STAMINA_MEANS[
-    REFORM_TIER_COUNT
-] =
-{
-    3.38,
-    3.48,
-    3.79,
-    4.69,
-    5.23,
-    5.65,
-    5.75,
-    6.15,
-    6.26,
-    6.41,
-
-    6.70,
-    7.04,
-    7.37,
-    8.04,
-    9.32,
-    9.60,
-    9.96,
-    10.81,
-    11.66,
-    12.41
-};
-
-
-static const double TECH_MEANS[
-    REFORM_TIER_COUNT
-] =
-{
-    2.84,
-    3.08,
-    3.09,
-    3.90,
-    4.18,
-    4.50,
-    5.43,
-    5.69,
-    6.31,
-    6.46,
-
-    6.63,
-    7.00,
-    7.31,
-    7.99,
-    9.22,
-    9.60,
-    10.25,
-    10.64,
-    11.69,
-    12.10
-};
-
-
-static const char *TIER_NAMES[
-    REFORM_TIER_COUNT
-] =
-{
-    "1ST",
-    "2ND",
-    "3RD",
-    "4TH",
-    "5TH",
-    "6TH",
-    "7TH",
-    "8TH",
-    "9TH",
-    "10TH",
-
-    "ALPHA",
-    "BETA",
-    "GAMMA",
-    "DELTA",
-    "EPSILON",
-    "ZETA",
-    "ETA",
-    "THETA",
-    "IOTA",
-    "KAPPA"
-};
-
-
 static const double *get_ruler(
     ReformRuler ruler
 )
 {
-    switch (ruler)
-    {
-        case REFORM_RULER_JACK:
-            return JACK_MEANS;
+    if (ruler < 0 || ruler >= REFORM_RULER_COUNT)
+        ruler = REFORM_RULER_GENERAL;
 
-        case REFORM_RULER_SPEED:
-            return SPEED_MEANS;
-
-        case REFORM_RULER_STAMINA:
-            return STAMINA_MEANS;
-
-        case REFORM_RULER_TECH:
-            return TECH_MEANS;
-
-        case REFORM_RULER_GENERAL:
-        default:
-            return GENERAL_MEANS;
-    }
+    return MANIA4K_CALIBRATION.reform.means[ruler];
 }
 
 
@@ -286,16 +105,19 @@ static ReformSublevel sublevel_from_fraction(
         );
 
 
-    if (fraction <= 0.20)
+    const double *edges =
+        MANIA4K_CALIBRATION.reform.sublevel_edges;
+
+    if (fraction <= edges[0])
         return REFORM_SUBLEVEL_LOW;
 
-    if (fraction <= 0.40)
+    if (fraction <= edges[1])
         return REFORM_SUBLEVEL_MID_LOW;
 
-    if (fraction <= 0.60)
+    if (fraction <= edges[2])
         return REFORM_SUBLEVEL_MID;
 
-    if (fraction <= 0.80)
+    if (fraction <= edges[3])
         return REFORM_SUBLEVEL_MID_HIGH;
 
 
@@ -317,7 +139,7 @@ const char *ReformTierName(
 
 
     return
-        TIER_NAMES[
+        MANIA4K_CALIBRATION.reform.tier_names[
             tier_index
         ];
 }
@@ -327,26 +149,10 @@ const char *ReformRulerName(
     ReformRuler ruler
 )
 {
-    switch (ruler)
-    {
-        case REFORM_RULER_GENERAL:
-            return "GENERAL";
+    if (ruler < 0 || ruler >= REFORM_RULER_COUNT)
+        return "UNKNOWN";
 
-        case REFORM_RULER_JACK:
-            return "JACK";
-
-        case REFORM_RULER_SPEED:
-            return "SPEED";
-
-        case REFORM_RULER_STAMINA:
-            return "STAMINA";
-
-        case REFORM_RULER_TECH:
-            return "TECH";
-
-        default:
-            return "UNKNOWN";
-    }
+    return MANIA4K_CALIBRATION.reform.ruler_names[ruler];
 }
 
 
@@ -354,26 +160,10 @@ const char *ReformSublevelName(
     ReformSublevel sublevel
 )
 {
-    switch (sublevel)
-    {
-        case REFORM_SUBLEVEL_LOW:
-            return "LOW";
+    if (sublevel < 0 || sublevel >= MANIA4K_SUBLEVEL_COUNT)
+        return "UNKNOWN";
 
-        case REFORM_SUBLEVEL_MID_LOW:
-            return "MID-LOW";
-
-        case REFORM_SUBLEVEL_MID:
-            return "MID";
-
-        case REFORM_SUBLEVEL_MID_HIGH:
-            return "MID-HIGH";
-
-        case REFORM_SUBLEVEL_HIGH:
-            return "HIGH";
-
-        default:
-            return "UNKNOWN";
-    }
+    return MANIA4K_CALIBRATION.reform.sublevel_names[sublevel];
 }
 
 
