@@ -2,8 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-BUILD_DIR="${ROOT}/build-linux-x11-release"
-DIST_BINARY="${ROOT}/dist/ManiaDanOverlay"
+BUILD_DIR="${ROOT}/build/LinuxX11"
+OUTPUT_BINARY="${ROOT}/bin/ManiaDanOverlay-LinuxX11"
 
 if [[ "$(uname -s)" != "Linux" ]]; then
     echo "This release script is for Linux/X11 only." >&2
@@ -11,7 +11,8 @@ if [[ "$(uname -s)" != "Linux" ]]; then
 fi
 
 if [[ "${1:-}" == "--clean" ]]; then
-    rm -rf "${BUILD_DIR}" "${ROOT}/dist"
+    rm -rf "${BUILD_DIR}"
+    rm -f "${OUTPUT_BINARY}"
 fi
 
 if command -v nproc >/dev/null 2>&1; then
@@ -31,21 +32,21 @@ cmake \
     -DMANIADANOVERLAY_ENABLE_LTO=ON \
     -DMANIADANOVERLAY_STATIC_GNU_RUNTIME=ON
 
-echo "==> Building and staging one-file release"
+echo "==> Building and staging Linux X11 binary"
 cmake \
     --build "${BUILD_DIR}" \
     --parallel "${JOBS}" \
-    --target linux-x11-dist
+    --target linux-x11-bin
 
-if [[ ! -x "${DIST_BINARY}" ]]; then
-    echo "Release verification finished but ${DIST_BINARY} is missing or not executable." >&2
+if [[ ! -x "${OUTPUT_BINARY}" ]]; then
+    echo "Release verification finished but ${OUTPUT_BINARY} is missing or not executable." >&2
     exit 1
 fi
 
 echo
 echo "============================================================"
-echo " ManiaDanOverlay Linux/X11 release is ready"
-echo " ${DIST_BINARY}"
+echo " ManiaDanOverlay Linux X11 release is ready"
+echo " ${OUTPUT_BINARY}"
 echo "============================================================"
 echo
-file "${DIST_BINARY}" || true
+file "${OUTPUT_BINARY}" || true

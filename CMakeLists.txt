@@ -352,12 +352,12 @@ endif()
 
 if (UNIX AND NOT APPLE AND MANIADANOVERLAY_LINUX_X11_ONLY)
     add_custom_target(
-        linux-x11-dist
+        linux-x11-bin
 
         COMMAND
             ${CMAKE_COMMAND}
             "-DINPUT_BINARY=$<TARGET_FILE:ManiaDanOverlay>"
-            "-DOUTPUT_DIR=${CMAKE_SOURCE_DIR}/dist"
+            "-DOUTPUT_BINARY=${CMAKE_SOURCE_DIR}/bin/ManiaDanOverlay-LinuxX11"
             "-DBUILD_CONFIG=$<CONFIG>"
             "-DSTRIP_TOOL=${CMAKE_STRIP}"
             "-DREQUIRE_STATIC_CPP_RUNTIME=${MANIADANOVERLAY_STATIC_GNU_RUNTIME}"
@@ -368,7 +368,7 @@ if (UNIX AND NOT APPLE AND MANIADANOVERLAY_LINUX_X11_ONLY)
             ManiaDanOverlay
 
         COMMENT
-            "Staging and verifying one-file Linux X11 release"
+            "Staging and verifying Linux X11 release binary"
 
         VERBATIM
     )
@@ -376,12 +376,12 @@ endif()
 
 if (WIN32)
     add_custom_target(
-        windows-dist
+        windows-bin
 
         COMMAND
             ${CMAKE_COMMAND}
             "-DINPUT_BINARY=$<TARGET_FILE:ManiaDanOverlay>"
-            "-DOUTPUT_DIR=${CMAKE_SOURCE_DIR}/dist-windows"
+            "-DOUTPUT_BINARY=${CMAKE_SOURCE_DIR}/bin/ManiaDanOverlay-Windows.exe"
             "-DBUILD_CONFIG=$<CONFIG>"
             "-DSTRIP_TOOL=${CMAKE_STRIP}"
             "-DOBJDUMP_TOOL=${CMAKE_OBJDUMP}"
@@ -392,7 +392,7 @@ if (WIN32)
             ManiaDanOverlay
 
         COMMENT
-            "Staging and verifying one-file Windows release"
+            "Staging and verifying Windows release binary"
 
         VERBATIM
     )

@@ -10,26 +10,29 @@ if (NOT EXISTS "${INPUT_BINARY}")
     )
 endif()
 
-if (NOT DEFINED OUTPUT_DIR OR OUTPUT_DIR STREQUAL "")
-    message(FATAL_ERROR "StageLinuxX11Release: OUTPUT_DIR was not provided")
+if (NOT DEFINED OUTPUT_BINARY OR OUTPUT_BINARY STREQUAL "")
+    message(FATAL_ERROR "StageLinuxX11Release: OUTPUT_BINARY was not provided")
 endif()
 
 if (NOT BUILD_CONFIG STREQUAL "Release")
     message(FATAL_ERROR
-        "linux-x11-dist must be built with CMAKE_BUILD_TYPE=Release (got '${BUILD_CONFIG}')"
+        "linux-x11-bin must be built with CMAKE_BUILD_TYPE=Release (got '${BUILD_CONFIG}')"
     )
 endif()
 
-file(REMOVE_RECURSE "${OUTPUT_DIR}")
+get_filename_component(OUTPUT_DIR "${OUTPUT_BINARY}" DIRECTORY)
 file(MAKE_DIRECTORY "${OUTPUT_DIR}")
-
-get_filename_component(INPUT_NAME "${INPUT_BINARY}" NAME)
-set(OUTPUT_BINARY "${OUTPUT_DIR}/${INPUT_NAME}")
+file(REMOVE "${OUTPUT_BINARY}")
 
 file(
-    COPY "${INPUT_BINARY}"
-    DESTINATION "${OUTPUT_DIR}"
-    FILE_PERMISSIONS
+    COPY_FILE
+    "${INPUT_BINARY}"
+    "${OUTPUT_BINARY}"
+)
+
+file(
+    CHMOD "${OUTPUT_BINARY}"
+    PERMISSIONS
         OWNER_READ OWNER_WRITE OWNER_EXECUTE
         GROUP_READ GROUP_EXECUTE
         WORLD_READ WORLD_EXECUTE
@@ -50,15 +53,6 @@ if (DEFINED STRIP_TOOL AND NOT STRIP_TOOL STREQUAL "" AND EXISTS "${STRIP_TOOL}"
     endif()
 else()
     message(WARNING "No strip tool found; release executable will remain unstripped")
-endif()
-
-file(GLOB DIST_ENTRIES LIST_DIRECTORIES TRUE "${OUTPUT_DIR}/*")
-list(LENGTH DIST_ENTRIES DIST_ENTRY_COUNT)
-
-if (NOT DIST_ENTRY_COUNT EQUAL 1)
-    message(FATAL_ERROR
-        "Release staging produced ${DIST_ENTRY_COUNT} entries in ${OUTPUT_DIR}; expected exactly one"
-    )
 endif()
 
 if (IS_DIRECTORY "${OUTPUT_BINARY}")
@@ -135,7 +129,6 @@ message(STATUS "")
 message(STATUS "ManiaDanOverlay Linux X11 release ready")
 message(STATUS "  file: ${OUTPUT_BINARY}")
 message(STATUS "  size: ${OUTPUT_SIZE_KIB} KiB")
-message(STATUS "  dist entries: ${DIST_ENTRY_COUNT}")
 message(STATUS "  backend: X11 only")
 message(STATUS "  libcurl: absent")
 message(STATUS "  Wayland: absent")

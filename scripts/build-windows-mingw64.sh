@@ -2,12 +2,13 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BUILD_DIR="${ROOT}/build-windows-mingw64"
-DIST_DIR="${ROOT}/dist-windows"
+BUILD_DIR="${ROOT}/build/Windows"
+OUTPUT_BINARY="${ROOT}/bin/ManiaDanOverlay-Windows.exe"
 TOOLCHAIN="${ROOT}/cmake/toolchains/mingw64.cmake"
 
 if [[ "${1:-}" == "--clean" ]]; then
-    rm -rf "${BUILD_DIR}" "${DIST_DIR}"
+    rm -rf "${BUILD_DIR}"
+    rm -f "${OUTPUT_BINARY}"
 fi
 
 required=(
@@ -48,8 +49,6 @@ if command -v ninja >/dev/null 2>&1; then
 fi
 
 cmake "${cmake_args[@]}"
-cmake --build "${BUILD_DIR}" --target windows-dist --parallel
+cmake --build "${BUILD_DIR}" --target windows-bin --parallel
 
-printf '\nWindows release:\n  %s\n\n' "${DIST_DIR}/ManiaDanOverlay.exe"
-printf 'dist-windows contents:\n'
-find "${DIST_DIR}" -maxdepth 1 -type f -printf '  %f\n'
+printf '\nWindows release:\n  %s\n' "${OUTPUT_BINARY}"

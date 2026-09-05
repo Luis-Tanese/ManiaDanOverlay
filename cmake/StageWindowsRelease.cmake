@@ -6,19 +6,18 @@ if (NOT EXISTS "${INPUT_BINARY}")
     message(FATAL_ERROR "Windows executable does not exist: ${INPUT_BINARY}")
 endif()
 
-if (NOT DEFINED OUTPUT_DIR OR OUTPUT_DIR STREQUAL "")
-    message(FATAL_ERROR "OUTPUT_DIR is required")
+if (NOT DEFINED OUTPUT_BINARY OR OUTPUT_BINARY STREQUAL "")
+    message(FATAL_ERROR "OUTPUT_BINARY is required")
 endif()
 
 if (DEFINED BUILD_CONFIG AND NOT BUILD_CONFIG STREQUAL "" AND NOT BUILD_CONFIG STREQUAL "Release")
-    message(FATAL_ERROR "windows-dist must be staged from Release, got '${BUILD_CONFIG}'")
+    message(FATAL_ERROR "windows-bin must be staged from Release, got '${BUILD_CONFIG}'")
 endif()
 
-file(REMOVE_RECURSE "${OUTPUT_DIR}")
+get_filename_component(OUTPUT_DIR "${OUTPUT_BINARY}" DIRECTORY)
 file(MAKE_DIRECTORY "${OUTPUT_DIR}")
-
-set(OUTPUT_BINARY "${OUTPUT_DIR}/ManiaDanOverlay.exe")
-file(COPY_FILE "${INPUT_BINARY}" "${OUTPUT_BINARY}" ONLY_IF_DIFFERENT)
+file(REMOVE "${OUTPUT_BINARY}")
+file(COPY_FILE "${INPUT_BINARY}" "${OUTPUT_BINARY}")
 
 if (DEFINED STRIP_TOOL AND NOT STRIP_TOOL STREQUAL "")
     execute_process(
@@ -70,13 +69,6 @@ foreach(FORBIDDEN IN LISTS FORBIDDEN_DLLS)
         message(FATAL_ERROR "Forbidden runtime dependency found in Windows release: ${FORBIDDEN}")
     endif()
 endforeach()
-
-file(GLOB DIST_FILES LIST_DIRECTORIES FALSE "${OUTPUT_DIR}/*")
-list(LENGTH DIST_FILES DIST_FILE_COUNT)
-
-if (NOT DIST_FILE_COUNT EQUAL 1)
-    message(FATAL_ERROR "Windows dist must contain exactly one file; found ${DIST_FILE_COUNT}")
-endif()
 
 file(SIZE "${OUTPUT_BINARY}" OUTPUT_SIZE)
 message(STATUS "Windows one-file release ready: ${OUTPUT_BINARY} (${OUTPUT_SIZE} bytes)")
