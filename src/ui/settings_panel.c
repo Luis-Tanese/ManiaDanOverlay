@@ -5,6 +5,8 @@
 #include <stdlib.h>
 
 #include "raylib.h"
+#include "app/identity.h"
+#include "calibration/mania4k_calibration.h"
 #include "ui/font.h"
 
 static const Color PANEL = {29, 32, 34, 255};
@@ -389,7 +391,7 @@ bool SettingsPanelDraw(
         fmaxf(footer_top - header_bottom - 14.0f, 1.0f)
     };
 
-    const float content_height = 666.0f;
+    const float content_height = 1160.0f;
     const float max_scroll =
         fmaxf(content_height - viewport.height, 0.0f);
 
@@ -565,6 +567,67 @@ bool SettingsPanelDraw(
     DrawLine((int)left, (int)y, (int)(left + content_width), (int)y, RULE);
     y += 14.0f;
 
+    draw_label("HUD CONTENT", left, y, 12.0f, MUTED, true);
+    y += 22.0f;
+
+    changed |=
+        draw_toggle_row(
+            (Rectangle){left, y, content_width, 50.0f},
+            "Mod and rate",
+            "Show the active mod and clock rate in the HUD footer.",
+            &settings->hud_show_mod_rate,
+            theme
+        );
+
+    y += 53.0f;
+
+    changed |=
+        draw_toggle_row(
+            (Rectangle){left, y, content_width, 50.0f},
+            "Key mode",
+            "Show 4K in the HUD footer.",
+            &settings->hud_show_key_mode,
+            theme
+        );
+
+    y += 53.0f;
+
+    changed |=
+        draw_toggle_row(
+            (Rectangle){left, y, content_width, 50.0f},
+            "Graph mode",
+            "Show Overview or Focus and the Focus span in the footer.",
+            &settings->hud_show_graph_mode,
+            theme
+        );
+
+    y += 53.0f;
+
+    changed |=
+        draw_toggle_row(
+            (Rectangle){left, y, content_width, 50.0f},
+            "Tosu client",
+            "Show the connected Tosu client in the HUD footer.",
+            &settings->hud_show_client,
+            theme
+        );
+
+    y += 53.0f;
+
+    changed |=
+        draw_toggle_row(
+            (Rectangle){left, y, content_width, 50.0f},
+            "MSD patterns",
+            "Show MinaCalc pattern names and overall MSD in the HUD.",
+            &settings->hud_show_msd,
+            theme
+        );
+
+    y += 60.0f;
+
+    DrawLine((int)left, (int)y, (int)(left + content_width), (int)y, RULE);
+    y += 14.0f;
+
     draw_label("WINDOW", left, y, 12.0f, MUTED, true);
     y += 22.0f;
 
@@ -681,6 +744,63 @@ bool SettingsPanelDraw(
         theme.accent,
         false
     );
+
+    y += 30.0f;
+    DrawLine((int)left, (int)y, (int)(left + content_width), (int)y, RULE);
+    y += 14.0f;
+
+    draw_label("ABOUT", left, y, 12.0f, MUTED, true);
+    y += 23.0f;
+
+    char version_label[96];
+    snprintf(
+        version_label,
+        sizeof(version_label),
+        "%s %s",
+        MANIADANOVERLAY_NAME,
+        MANIADANOVERLAY_VERSION
+    );
+
+    draw_label(version_label, left, y, 15.0f, TEXT, true);
+    y += 23.0f;
+
+    char build_label[160];
+    snprintf(
+        build_label,
+        sizeof(build_label),
+        "%s  |  %s",
+        MANIADANOVERLAY_PLATFORM,
+        MANIADANOVERLAY_BUILD_TYPE
+    );
+
+    draw_label(build_label, left, y, 11.5f, MUTED, false);
+    y += 20.0f;
+
+    char calibration_label[96];
+    snprintf(
+        calibration_label,
+        sizeof(calibration_label),
+        "Calibration %s",
+        MANIA4K_CALIBRATION.revision
+    );
+
+    draw_label(calibration_label, left, y, 11.5f, MUTED, false);
+    y += 20.0f;
+
+    draw_label("by " MANIADANOVERLAY_AUTHOR, left, y, 11.5f, MUTED, false);
+    y += 25.0f;
+
+    if (
+        draw_button(
+            (Rectangle){left, y, 148.0f, 31.0f},
+            "OPEN GITHUB",
+            false,
+            theme
+        )
+    )
+    {
+        OpenURL(MANIADANOVERLAY_GITHUB_URL);
+    }
 
     g_use_interaction_clip = false;
     EndScissorMode();

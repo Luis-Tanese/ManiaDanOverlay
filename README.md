@@ -74,6 +74,8 @@ Stamina, Jumpstream 32.69 MSD
 
 For LN Course charts, the HUD also keeps the LN profile description and MinaCalc head-pattern information visible.
 
+The supporting HUD content can be adjusted from Settings. Mod/rate, the 4K label, graph mode, Tosu client information, and MinaCalc pattern/MSD output can be shown or hidden independently. The density graph and current Dan or LN Course result remain the core HUD elements.
+
 ### Extra Info
 
 Extra Info keeps the full analysis layout. It has:
@@ -334,19 +336,32 @@ Current defaults:
 
 ```json
 {
-  "version": 3,
+  "version": 5,
   "view_mode": "hud",
   "graph_mode": "overview",
   "focus_span_seconds": 30,
   "always_on_top": true,
+  "hud_content": {
+    "mod_rate": true,
+    "key_mode": true,
+    "graph_mode": true,
+    "client": false,
+    "msd": true
+  },
   "window": {
     "remember_position": true,
     "remember_size": true,
     "has_position": true,
     "x": 1920,
     "y": 381,
-    "width": 503,
-    "height": 240
+    "hud": {
+      "width": 503,
+      "height": 240
+    },
+    "extra_info": {
+      "width": 900,
+      "height": 600
+    }
   }
 }
 ```
@@ -356,6 +371,8 @@ The stored window position is checked against the connected monitor layout befor
 Settings are written through a temporary file and replaced atomically. Window movement and resizing are debounced to avoid writing the settings file continuously while the user drags the window (had some issues with it soooo that's the best solution).
 
 F3 diagnostics and F10 OBS Hide are temporary runtime states and do not overwrite the user's normal saved window size or position.
+
+The Settings panel also includes an About section with the application version, build type, platform, active calibration revision, and a button that opens the ManiaDanOverlay GitHub repository. Opening the repository is the only part of this section that requires internet access.
 
 ### OBS behavior
 

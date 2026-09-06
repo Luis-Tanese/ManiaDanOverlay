@@ -2518,6 +2518,14 @@ static void draw_hud_ln_profile(
         );
     }
 
+    if (
+        model->settings &&
+        !model->settings->hud_show_msd
+    )
+    {
+        return;
+    }
+
     if (!model->msd_ready || !model->msd)
         return;
 
@@ -2610,6 +2618,28 @@ static void draw_hud_ln_profile(
     );
 }
 
+static void append_hud_footer_item(
+    char *footer,
+    size_t footer_size,
+    const char *item)
+{
+    if (!footer || footer_size == 0 || !item || item[0] == '\0')
+        return;
+
+    const size_t used = strlen(footer);
+
+    if (used >= footer_size - 1)
+        return;
+
+    snprintf(
+        footer + used,
+        footer_size - used,
+        "%s%s",
+        used > 0 ? "  |  " : "",
+        item
+    );
+}
+
 static void draw_hud_footer(
     const AppViewModel *model,
     Rectangle info_bounds)
@@ -2617,23 +2647,64 @@ static void draw_hud_footer(
     if (!model || !model->tosu)
         return;
 
-    char footer[260];
+    const AppSettings *settings = model->settings;
+    char footer[320] = "";
+    char item[128];
 
-    snprintf(
-        footer,
-        sizeof(footer),
-        "%s %.2fx  |  4K  |  %s%s  |  F2 SETTINGS",
-        model->tosu->mod[0]
-            ? model->tosu->mod
-            : "NM",
-        model->tosu->rate,
-        model->graph_mode == DENSITY_GRAPH_FOCUS
-            ? "FOCUS "
-            : "OVERVIEW",
-        model->graph_mode == DENSITY_GRAPH_FOCUS
-            ? TextFormat("%ds", model->focus_span_seconds)
-            : ""
-    );
+    if (!settings || settings->hud_show_mod_rate)
+    {
+        snprintf(
+            item,
+            sizeof(item),
+            "%s %.2fx",
+            model->tosu->mod[0]
+                ? model->tosu->mod
+                : "NM",
+            model->tosu->rate
+        );
+
+        append_hud_footer_item(footer, sizeof(footer), item);
+    }
+
+    if (!settings || settings->hud_show_key_mode)
+    {
+        append_hud_footer_item(footer, sizeof(footer), "4K");
+    }
+
+    if (!settings || settings->hud_show_graph_mode)
+    {
+        if (model->graph_mode == DENSITY_GRAPH_FOCUS)
+        {
+            snprintf(
+                item,
+                sizeof(item),
+                "FOCUS %ds",
+                model->focus_span_seconds
+            );
+        }
+        else
+        {
+            snprintf(item, sizeof(item), "OVERVIEW");
+        }
+
+        append_hud_footer_item(footer, sizeof(footer), item);
+    }
+
+    if (settings && settings->hud_show_client)
+    {
+        snprintf(
+            item,
+            sizeof(item),
+            "tosu %s",
+            model->tosu->client[0]
+                ? model->tosu->client
+                : "lazer"
+        );
+
+        append_hud_footer_item(footer, sizeof(footer), item);
+    }
+
+    append_hud_footer_item(footer, sizeof(footer), "F2 SETTINGS");
 
     const float y =
         info_bounds.y +
@@ -2746,11 +2817,17 @@ static void draw_hud_player(
         const float patterns_y =
             rank_y + rank_line_height + 8.0f;
 
-        draw_hud_rice_patterns(
-            model,
-            info,
-            patterns_y
-        );
+        if (
+            !model->settings ||
+            model->settings->hud_show_msd
+        )
+        {
+            draw_hud_rice_patterns(
+                model,
+                info,
+                patterns_y
+            );
+        }
     }
 
     draw_hud_footer(model, info);

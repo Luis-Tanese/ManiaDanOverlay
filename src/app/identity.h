@@ -4,9 +4,18 @@
 #define MANIADANOVERLAY_NAME "ManiaDanOverlay"
 #define MANIADANOVERLAY_AUTHOR "Tanese"
 #define MANIADANOVERLAY_TITLE "ManiaDanOverlay by Tanese"
+#define MANIADANOVERLAY_GITHUB_URL "https://github.com/Luis-Tanese/ManiaDanOverlay"
 
 #ifndef MANIADANOVERLAY_VERSION
-#define MANIADANOVERLAY_VERSION "1.0.0"
+#define MANIADANOVERLAY_VERSION "1.2.0"
+#endif
+
+#ifndef MANIADANOVERLAY_BUILD_TYPE
+#define MANIADANOVERLAY_BUILD_TYPE "Unknown"
+#endif
+
+#ifndef MANIADANOVERLAY_PLATFORM
+#define MANIADANOVERLAY_PLATFORM "Unknown platform"
 #endif
 
 #define MANIADANOVERLAY_USER_AGENT \

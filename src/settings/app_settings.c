@@ -283,6 +283,12 @@ void AppSettingsDefaults(
 
         .always_on_top = true,
 
+        .hud_show_mod_rate = true,
+        .hud_show_key_mode = true,
+        .hud_show_graph_mode = true,
+        .hud_show_client = false,
+        .hud_show_msd = true,
+
         .remember_window_position = true,
         .remember_window_size = true,
         .has_window_position = true,
@@ -506,6 +512,47 @@ bool AppSettingsLoad(
             settings->always_on_top
         );
 
+    yyjson_val *hud_content =
+        yyjson_obj_get(root, "hud_content");
+
+    if (hud_content && yyjson_is_obj(hud_content))
+    {
+        settings->hud_show_mod_rate =
+            json_bool_or(
+                hud_content,
+                "mod_rate",
+                settings->hud_show_mod_rate
+            );
+
+        settings->hud_show_key_mode =
+            json_bool_or(
+                hud_content,
+                "key_mode",
+                settings->hud_show_key_mode
+            );
+
+        settings->hud_show_graph_mode =
+            json_bool_or(
+                hud_content,
+                "graph_mode",
+                settings->hud_show_graph_mode
+            );
+
+        settings->hud_show_client =
+            json_bool_or(
+                hud_content,
+                "client",
+                settings->hud_show_client
+            );
+
+        settings->hud_show_msd =
+            json_bool_or(
+                hud_content,
+                "msd",
+                settings->hud_show_msd
+            );
+    }
+
     yyjson_val *window = yyjson_obj_get(root, "window");
 
     if (window && yyjson_is_obj(window))
@@ -670,6 +717,13 @@ bool AppSettingsSave(
             "  \"graph_mode\": \"%s\",\n"
             "  \"focus_span_seconds\": %d,\n"
             "  \"always_on_top\": %s,\n"
+            "  \"hud_content\": {\n"
+            "    \"mod_rate\": %s,\n"
+            "    \"key_mode\": %s,\n"
+            "    \"graph_mode\": %s,\n"
+            "    \"client\": %s,\n"
+            "    \"msd\": %s\n"
+            "  },\n"
             "  \"window\": {\n"
             "    \"remember_position\": %s,\n"
             "    \"remember_size\": %s,\n"
@@ -691,6 +745,11 @@ bool AppSettingsSave(
             graph_mode,
             clean.focus_span_seconds,
             clean.always_on_top ? "true" : "false",
+            clean.hud_show_mod_rate ? "true" : "false",
+            clean.hud_show_key_mode ? "true" : "false",
+            clean.hud_show_graph_mode ? "true" : "false",
+            clean.hud_show_client ? "true" : "false",
+            clean.hud_show_msd ? "true" : "false",
             clean.remember_window_position ? "true" : "false",
             clean.remember_window_size ? "true" : "false",
             clean.has_window_position ? "true" : "false",

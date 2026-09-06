@@ -99,6 +99,11 @@ static bool app_settings_equal(
         a->graph_mode == b->graph_mode &&
         a->focus_span_seconds == b->focus_span_seconds &&
         a->always_on_top == b->always_on_top &&
+        a->hud_show_mod_rate == b->hud_show_mod_rate &&
+        a->hud_show_key_mode == b->hud_show_key_mode &&
+        a->hud_show_graph_mode == b->hud_show_graph_mode &&
+        a->hud_show_client == b->hud_show_client &&
+        a->hud_show_msd == b->hud_show_msd &&
         a->remember_window_position == b->remember_window_position &&
         a->remember_window_size == b->remember_window_size &&
         a->has_window_position == b->has_window_position &&

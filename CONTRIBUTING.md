@@ -2,7 +2,7 @@
 
 Thanks for taking an interest in ManiaDanOverlay.
 
-ManiaDanOverlay currently targets 4K osu mania on Windows and Linux X11, with a focus on compact presentation, predictable behavior, low runtime overhead, and single-file release builds.
+ManiaDanOverlay currently targets 4K osu!mania on Windows and Linux X11, with a focus on compact presentation, predictable behavior, low runtime overhead, and single-file release builds.
 
 Those targets are the current supported baseline, not a permanent limit on the project. Contributions that add new platforms, key modes, calibration sets, or related analysis support are welcome when they preserve the existing architecture and do not regress currently supported behavior.
 
@@ -256,7 +256,9 @@ Its priorities are:
 
 The HUD should not gradually turn back into the Extra Info view.
 
-Song title, artist, mapper, difficulty name, BPM, object count, and similar metadata belong in Extra Info unless there is a strong reason to change the product direction.
+Song title, artist, mapper, difficulty name, BPM, object count, and similar metadata belong in Extra Info unless there is a strong reason to change the product direction. Supporting HUD details can be optional settings, but the density graph and current Dan or LN Course result should remain the stable core of the HUD.
+
+The About section should continue to report build information from the application and calibration sources rather than duplicating hard-coded version strings inside the UI.
 
 UI changes should preserve:
 
@@ -273,7 +275,7 @@ Avoid adding decorative effects that make the overlay harder to read or visually
 
 ## Settings
 
-Settings are stored in JSON and currently use schema version 3.
+Settings are stored in JSON and currently use schema version 5.
 
 Linux:
 

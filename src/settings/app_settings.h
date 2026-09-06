@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#define APP_SETTINGS_VERSION 4
+#define APP_SETTINGS_VERSION 5
 
 #define APP_SETTINGS_HUD_DEFAULT_WIDTH 503
 #define APP_SETTINGS_HUD_DEFAULT_HEIGHT 240
@@ -43,6 +43,12 @@ typedef struct
     int focus_span_seconds;
 
     bool always_on_top;
+
+    bool hud_show_mod_rate;
+    bool hud_show_key_mode;
+    bool hud_show_graph_mode;
+    bool hud_show_client;
+    bool hud_show_msd;
 
     bool remember_window_position;
     bool remember_window_size;
