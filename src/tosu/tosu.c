@@ -233,6 +233,158 @@ static const char *first_string(
     return "";
 }
 
+static void append_mod_token(
+    char *output,
+    size_t output_size,
+    const char *token
+)
+{
+    if (
+        !output ||
+        output_size == 0 ||
+        !token ||
+        token[0] == '\0'
+    )
+    {
+        return;
+    }
+
+    const size_t used = strlen(output);
+
+    if (used >= output_size - 1)
+        return;
+
+    snprintf(
+        output + used,
+        output_size - used,
+        "%s%s",
+        used > 0 ? " " : "",
+        token
+    );
+}
+
+
+static void normalize_compact_mod_name(
+    const char *source,
+    char *output,
+    size_t output_size
+)
+{
+    if (!output || output_size == 0)
+        return;
+
+    output[0] = '\0';
+
+    if (!source || source[0] == '\0')
+    {
+        copy_string(output, output_size, "NM");
+        return;
+    }
+
+    char cleaned[TOSU_MOD_MAX];
+    size_t cleaned_count = 0;
+    bool had_separator = false;
+
+    for (size_t i = 0; source[i] != '\0'; ++i)
+    {
+        const char c = source[i];
+
+        if (c == ' ' || c == ',' || c == '+' || c == '|')
+        {
+            had_separator = true;
+
+            if (
+                cleaned_count > 0 &&
+                cleaned_count + 1 < sizeof(cleaned) &&
+                cleaned[cleaned_count - 1] != ' '
+            )
+            {
+                cleaned[cleaned_count++] = ' ';
+            }
+        }
+        else if (cleaned_count + 1 < sizeof(cleaned))
+        {
+            cleaned[cleaned_count++] = c;
+        }
+    }
+
+    while (cleaned_count > 0 && cleaned[cleaned_count - 1] == ' ')
+        --cleaned_count;
+
+    cleaned[cleaned_count] = '\0';
+
+    if (had_separator || cleaned_count <= 2 || (cleaned_count % 2) != 0)
+    {
+        copy_string(output, output_size, cleaned);
+        return;
+    }
+
+    for (size_t i = 0; i < cleaned_count; i += 2)
+    {
+        char token[3] =
+        {
+            cleaned[i],
+            cleaned[i + 1],
+            '\0'
+        };
+
+        append_mod_token(output, output_size, token);
+    }
+}
+
+
+static void extract_mod_display(
+    yyjson_doc *doc,
+    const char *fallback_name,
+    char *output,
+    size_t output_size
+)
+{
+    if (!output || output_size == 0)
+        return;
+
+    output[0] = '\0';
+
+    yyjson_val *array =
+        json_pointer(
+            doc,
+            "/play/mods/array"
+        );
+
+    if (array && yyjson_is_arr(array))
+    {
+        size_t index;
+        size_t max;
+        yyjson_val *mod;
+
+        yyjson_arr_foreach(array, index, max, mod)
+        {
+            if (!yyjson_is_obj(mod))
+                continue;
+
+            yyjson_val *acronym_value =
+                yyjson_obj_get(mod, "acronym");
+
+            if (!acronym_value || !yyjson_is_str(acronym_value))
+                continue;
+
+            append_mod_token(
+                output,
+                output_size,
+                yyjson_get_str(acronym_value)
+            );
+        }
+    }
+
+    if (output[0] == '\0')
+    {
+        normalize_compact_mod_name(
+            fallback_name,
+            output,
+            output_size
+        );
+    }
+}
 
 
 static bool is_supported_rate_mod(
@@ -505,17 +657,6 @@ static void parse_snapshot(
         true;
 
     copy_string(
-        g_snapshot.client,
-        sizeof(
-            g_snapshot.client
-        ),
-        json_string(
-            doc,
-            "/client"
-        )
-    );
-
-    copy_string(
         g_snapshot.state,
         sizeof(
             g_snapshot.state
@@ -591,22 +732,24 @@ static void parse_snapshot(
         )
     );
 
-    copy_string(
-        g_snapshot.mod,
-        sizeof(
-            g_snapshot.mod
-        ),
+    const char *raw_mod_name =
         json_string(
             doc,
             "/play/mods/name"
-        )
-    );
+        );
 
     g_snapshot.rate =
         extract_rate(
             doc,
-            g_snapshot.mod
+            raw_mod_name
         );
+
+    extract_mod_display(
+        doc,
+        raw_mod_name,
+        g_snapshot.mod,
+        sizeof(g_snapshot.mod)
+    );
 
     g_snapshot.time_ms =
         json_number(

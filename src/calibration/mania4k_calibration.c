@@ -9,7 +9,7 @@
 
 const Mania4KCalibration MANIA4K_CALIBRATION =
 {
-    .revision = "4K-R1",
+    .revision = "4K-R2",
 
     /* 
      * reform means are ordered GENERAL, JACK, SPEED, STAMINA, TECH. 

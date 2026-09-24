@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -5,6 +6,8 @@
 #include "raylib.h"
 
 #include "app/identity.h"
+#include "app/focus_density.h"
+#include "app/pause_tracker.h"
 
 #include "beatmap/beatmap.h"
 #include "beatmap/beatmap_fetch.h"
@@ -85,34 +88,48 @@ static size_t focus_span_index_for(
 }
 
 
-static bool app_settings_equal(
-    const AppSettings *a,
-    const AppSettings *b
+
+static bool text_contains_ignore_case(
+    const char *text,
+    const char *needle
 )
 {
-    if (!a || !b)
+    if (!text || !needle || needle[0] == '\0')
         return false;
 
-    return
-        a->version == b->version &&
-        a->view_mode == b->view_mode &&
-        a->graph_mode == b->graph_mode &&
-        a->focus_span_seconds == b->focus_span_seconds &&
-        a->always_on_top == b->always_on_top &&
-        a->hud_show_mod_rate == b->hud_show_mod_rate &&
-        a->hud_show_key_mode == b->hud_show_key_mode &&
-        a->hud_show_graph_mode == b->hud_show_graph_mode &&
-        a->hud_show_client == b->hud_show_client &&
-        a->hud_show_msd == b->hud_show_msd &&
-        a->remember_window_position == b->remember_window_position &&
-        a->remember_window_size == b->remember_window_size &&
-        a->has_window_position == b->has_window_position &&
-        a->window_x == b->window_x &&
-        a->window_y == b->window_y &&
-        a->hud_window_width == b->hud_window_width &&
-        a->hud_window_height == b->hud_window_height &&
-        a->extra_info_window_width == b->extra_info_window_width &&
-        a->extra_info_window_height == b->extra_info_window_height;
+    for (size_t i = 0; text[i] != '\0'; ++i)
+    {
+        size_t j = 0;
+
+        while (
+            needle[j] != '\0' &&
+            text[i + j] != '\0' &&
+            tolower((unsigned char)text[i + j]) ==
+                tolower((unsigned char)needle[j])
+        )
+        {
+            ++j;
+        }
+
+        if (needle[j] == '\0')
+            return true;
+    }
+
+    return false;
+}
+
+
+static bool tosu_state_is_gameplay(
+    const TosuSnapshot *tosu
+)
+{
+    if (!tosu || !tosu->connected)
+        return false;
+
+    if (tosu->state[0] == '\0')
+        return tosu->time_ms > 0.0;
+
+    return text_contains_ignore_case(tosu->state, "play");
 }
 
 
@@ -372,6 +389,12 @@ int main(void)
     ChartFeatures features;
     ChartFeaturesInit(&features);
 
+    FocusDensityCurve focus_density;
+    FocusDensityCurveInit(&focus_density);
+
+    PauseTracker pause_tracker;
+    PauseTrackerInit(&pause_tracker);
+
     SunnySrResult sunny = {0};
     FamilyClassification classification = {0};
     RhythmProfileResult rhythm_profile = {0};
@@ -394,6 +417,7 @@ int main(void)
     char rhythm_checksum[64] = "";
     char msd_checksum[64] = "";
     char sunny_result_checksum[64] = "";
+    char focus_density_checksum[64] = "";
 
     char beatmap_status[256] = "Waiting for beatmap...";
 
@@ -407,10 +431,11 @@ int main(void)
     bool obs_hide_mode = false;
     Vector2 obs_restore_position = {0.0f, 0.0f};
 
-    const int focus_span_presets[] = {15, 30, 45, 60, 90, 120, 180};
-    const size_t focus_span_preset_count =
-        sizeof(focus_span_presets) /
-        sizeof(focus_span_presets[0]);
+    size_t focus_span_preset_count = 0;
+    const int *focus_span_presets =
+        AppSettingsFocusSpanPresets(
+            &focus_span_preset_count
+        );
 
     DensityGraphMode graph_mode =
         settings.graph_mode == APP_SETTINGS_GRAPH_FOCUS
@@ -431,6 +456,9 @@ int main(void)
     RulerSanityAction last_sanity_action = RULER_SANITY_KEEP;
     ReformRuler last_sanity_requested = REFORM_RULER_GENERAL;
     ReformRuler last_sanity_final = REFORM_RULER_GENERAL;
+    char tanmdo_log_checksum[64] = "";
+    ReformRuler last_tanmdo_ruler = REFORM_RULER_GENERAL;
+    double last_tanmdo_rate = 1.0;
 
     while (!WindowShouldClose())
     {
@@ -721,6 +749,10 @@ int main(void)
                 rhythm_checksum[0] = '\0';
                 msd_checksum[0] = '\0';
                 analysis_checksum[0] = '\0';
+                focus_density_checksum[0] = '\0';
+
+                FocusDensityCurveFree(&focus_density);
+                PauseTrackerReset(&pause_tracker);
             }
 
             const bool map_is_loaded =
@@ -800,6 +832,62 @@ int main(void)
             loaded_checksum[0] != '\0' &&
             strcmp(loaded_checksum, tosu->checksum) == 0 &&
             beatmap.note_count > 0;
+
+        if (
+            beatmap_ready &&
+            graph_mode == DENSITY_GRAPH_FOCUS &&
+            (
+                strcmp(
+                    focus_density_checksum,
+                    loaded_checksum
+                ) != 0 ||
+                focus_density.interval_ms !=
+                    settings.focus_density_interval_ms
+            )
+        )
+        {
+            if (
+                FocusDensityCurveBuild(
+                    &beatmap,
+                    settings.focus_density_interval_ms,
+                    &focus_density
+                )
+            )
+            {
+                snprintf(
+                    focus_density_checksum,
+                    sizeof(focus_density_checksum),
+                    "%s",
+                    loaded_checksum
+                );
+            }
+            else
+            {
+                FocusDensityCurveFree(&focus_density);
+                focus_density_checksum[0] = '\0';
+            }
+        }
+
+        const bool focus_density_ready =
+            beatmap_ready &&
+            focus_density.count > 0 &&
+            strcmp(
+                focus_density_checksum,
+                loaded_checksum
+            ) == 0 &&
+            focus_density.interval_ms ==
+                settings.focus_density_interval_ms;
+
+        PauseTrackerUpdate(
+            &pause_tracker,
+            beatmap_ready &&
+                tosu_state_is_gameplay(tosu),
+            tosu->time_ms,
+            beatmap_ready
+                ? beatmap.last_note_ms
+                : tosu->length_ms,
+            GetTime()
+        );
 
         if (
             beatmap_ready &&
@@ -1357,6 +1445,38 @@ int main(void)
             }
         }
 
+        const bool ln_route =
+            features_match_current &&
+            LnCourseShouldRoute(&features);
+
+        if (!ln_route && classification_ready)
+        {
+            const ReformRuler previous_ruler = selected_ruler;
+            selected_ruler = TanMdoRulerSelect(
+                selected_ruler,
+                active_family,
+                active_family_confidence,
+                sanity.top_support > 0.0 ? &sanity : NULL
+            );
+            uses_skillset_ruler = selected_ruler != REFORM_RULER_GENERAL;
+
+            if (selected_ruler != previous_ruler &&
+                (strcmp(tanmdo_log_checksum, loaded_checksum) != 0 ||
+                 last_tanmdo_ruler != selected_ruler ||
+                 rate_changed(last_tanmdo_rate, sunny_result_rate)))
+            {
+                TraceLog(LOG_INFO, "TanMDO ruler %s -> %s | family %s %.0f%%",
+                    ReformRulerName(previous_ruler),
+                    ReformRulerName(selected_ruler),
+                    ChartFamilyName(active_family),
+                    active_family_confidence * 100.0);
+                snprintf(tanmdo_log_checksum, sizeof(tanmdo_log_checksum),
+                    "%s", loaded_checksum);
+                last_tanmdo_ruler = selected_ruler;
+                last_tanmdo_rate = sunny_result_rate;
+            }
+        }
+
         ReformRankResult rank_result = {0};
 
         const bool rank_ready =
@@ -1367,22 +1487,19 @@ int main(void)
                 &rank_result
             );
 
-        const bool ln_route =
-            features_match_current &&
-            LnCourseShouldRoute(&features);
-
         LnCourseResult ln_course = {0};
         LnPlayerProfile ln_profile = {0};
 
         const bool ln_course_ready =
             ln_route &&
             sunny_matches_current &&
-            LnCourseEvaluate(
+            LnCourseEvaluateAtRate(
                 sunny.star_rating,
                 &features,
                 msd_matches_current
                     ? &msd
                     : NULL,
+                sunny_result_rate,
                 &ln_course
             );
 
@@ -1413,6 +1530,14 @@ int main(void)
             .tosu = tosu,
             .beatmap = &beatmap,
             .features = &features,
+            .focus_nps_curve =
+                focus_density_ready
+                    ? focus_density.points
+                    : NULL,
+            .focus_nps_curve_count =
+                focus_density_ready
+                    ? focus_density.count
+                    : 0,
             .sunny = &sunny,
             .msd = &msd,
             .ln_course = &ln_course,
@@ -1452,7 +1577,9 @@ int main(void)
             .settings = &settings,
             .view_mode = settings.view_mode,
             .graph_mode = graph_mode,
-            .focus_span_seconds = focus_span_presets[focus_span_index]
+            .focus_span_seconds = focus_span_presets[focus_span_index],
+            .pause_markers_ms = pause_tracker.markers_ms,
+            .pause_marker_count = pause_tracker.marker_count
         };
 
         const AppSettings settings_before_ui =
@@ -1463,7 +1590,7 @@ int main(void)
         );
 
         if (
-            !app_settings_equal(
+            !AppSettingsEqual(
                 &settings_before_ui,
                 &settings
             )
@@ -1549,6 +1676,7 @@ int main(void)
         );
     }
 
+    FocusDensityCurveFree(&focus_density);
     ChartFeaturesFree(&features);
     AnalysisMapFree(&classification_map);
     AnalysisMapFree(&analysis);

@@ -999,33 +999,27 @@ static void draw_rank_panel(
 
 
 static double sample_visible_nps(
-    const ChartFeatures *features,
+    const NpsPoint *curve,
+    size_t count,
     double time_ms,
     size_t *cursor
 )
 {
-    if (
-        !features ||
-        !features->nps_curve ||
-        features->nps_curve_count == 0
-    )
+    if (!curve || count == 0)
         return 0.0;
 
-    const size_t count =
-        features->nps_curve_count;
-
-    if (time_ms <= features->nps_curve[0].time_ms)
+    if (time_ms <= curve[0].time_ms)
     {
         if (cursor)
             *cursor = 0;
-        return features->nps_curve[0].nps;
+        return curve[0].nps;
     }
 
-    if (time_ms >= features->nps_curve[count - 1].time_ms)
+    if (time_ms >= curve[count - 1].time_ms)
     {
         if (cursor)
             *cursor = count - 1;
-        return features->nps_curve[count - 1].nps;
+        return curve[count - 1].nps;
     }
 
     size_t i = cursor ? *cursor : 0;
@@ -1035,7 +1029,7 @@ static double sample_visible_nps(
 
     while (
         i + 1 < count &&
-        features->nps_curve[i + 1].time_ms < time_ms
+        curve[i + 1].time_ms < time_ms
     )
     {
         ++i;
@@ -1043,7 +1037,7 @@ static double sample_visible_nps(
 
     while (
         i > 0 &&
-        features->nps_curve[i].time_ms > time_ms
+        curve[i].time_ms > time_ms
     )
     {
         --i;
@@ -1052,11 +1046,8 @@ static double sample_visible_nps(
     if (cursor)
         *cursor = i;
 
-    const NpsPoint *a =
-        &features->nps_curve[i];
-
-    const NpsPoint *b =
-        &features->nps_curve[i + 1];
+    const NpsPoint *a = &curve[i];
+    const NpsPoint *b = &curve[i + 1];
 
     const double denom =
         fmax(
@@ -1080,7 +1071,8 @@ static double sample_visible_nps(
 
 
 static double sample_overview_smoothed_nps(
-    const ChartFeatures *features,
+    const NpsPoint *curve,
+    size_t curve_count,
     double time_ms,
     double pixel_time_ms
 )
@@ -1107,7 +1099,8 @@ static double sample_overview_smoothed_nps(
 
         const double value =
             sample_visible_nps(
-                features,
+                curve,
+                curve_count,
                 sample_time,
                 NULL
             );
@@ -1127,7 +1120,8 @@ static double sample_overview_smoothed_nps(
 
 
 static double overview_smoothed_maximum(
-    const ChartFeatures *features,
+    const NpsPoint *curve,
+    size_t curve_count,
     double view_start,
     double view_span,
     float left,
@@ -1187,7 +1181,8 @@ static double overview_smoothed_maximum(
 
         const double nps =
             sample_overview_smoothed_nps(
-                features,
+                curve,
+                curve_count,
                 time_ms,
                 pixel_time_ms
             );
@@ -1200,7 +1195,8 @@ static double overview_smoothed_maximum(
 }
 
 static void draw_overview_smoothed_area(
-    const ChartFeatures *features,
+    const NpsPoint *curve,
+    size_t curve_count,
     double view_start,
     double view_span,
     double current_time,
@@ -1216,9 +1212,8 @@ static void draw_overview_smoothed_area(
 )
 {
     if (
-        !features ||
-        !features->nps_curve ||
-        features->nps_curve_count == 0 ||
+        !curve ||
+        curve_count == 0 ||
         view_span <= 0.0 ||
         maximum <= 0.0
     )
@@ -1291,7 +1286,8 @@ static void draw_overview_smoothed_area(
 
         const double nps =
             sample_overview_smoothed_nps(
-                features,
+                curve,
+                curve_count,
                 time_ms,
                 pixel_time_ms
             );
@@ -1354,7 +1350,8 @@ static void draw_overview_smoothed_area(
 }
 
 static void draw_density_fill_columns(
-    const ChartFeatures *features,
+    const NpsPoint *curve,
+    size_t curve_count,
     double view_start,
     double view_span,
     double current_time,
@@ -1368,9 +1365,8 @@ static void draw_density_fill_columns(
 )
 {
     if (
-        !features ||
-        !features->nps_curve ||
-        features->nps_curve_count == 0 ||
+        !curve ||
+        curve_count == 0 ||
         view_span <= 0.0 ||
         maximum <= 0.0
     )
@@ -1419,7 +1415,8 @@ static void draw_density_fill_columns(
 
         const double nps =
             sample_visible_nps(
-                features,
+                curve,
+                curve_count,
                 time_ms,
                 &cursor
             );
@@ -1508,21 +1505,39 @@ static void draw_outline_segment(
 static void draw_nps_graph(const AppViewModel *model, Rectangle bounds)
 {
     const ChartFeatures *features = model->features;
-    if (!features || !features->nps_curve || features->nps_curve_count == 0)
+
+    const bool focus_mode =
+        model->graph_mode == DENSITY_GRAPH_FOCUS;
+
+    const NpsPoint *curve =
+        focus_mode &&
+        model->focus_nps_curve &&
+        model->focus_nps_curve_count > 0
+            ? model->focus_nps_curve
+            : features ? features->nps_curve : NULL;
+
+    const size_t curve_count =
+        focus_mode &&
+        model->focus_nps_curve &&
+        model->focus_nps_curve_count > 0
+            ? model->focus_nps_curve_count
+            : features ? features->nps_curve_count : 0;
+
+    if (!curve || curve_count == 0)
     {
         ui_draw_text(UiFontRegular(), "No density data", (Vector2){bounds.x + 18.0f, bounds.y + 48.0f}, 15.0f, 0.0f, MUTED);
         return;
     }
 
     double maximum = 1.0;
-    for (size_t i = 0; i < features->nps_curve_count; ++i)
+    for (size_t i = 0; i < curve_count; ++i)
     {
-        if (features->nps_curve[i].nps > maximum)
-            maximum = features->nps_curve[i].nps;
+        if (curve[i].nps > maximum)
+            maximum = curve[i].nps;
     }
 
-    const double first_time = features->nps_curve[0].time_ms;
-    const double last_time = features->nps_curve[features->nps_curve_count - 1].time_ms;
+    const double first_time = curve[0].time_ms;
+    const double last_time = curve[curve_count - 1].time_ms;
 
     double current_time =
         visual_playback_time_ms(model->tosu);
@@ -1617,7 +1632,8 @@ static void draw_nps_graph(const AppViewModel *model, Rectangle bounds)
     {
         maximum =
             overview_smoothed_maximum(
-                features,
+                curve,
+                curve_count,
                 view_start,
                 view_span,
                 left,
@@ -1625,7 +1641,8 @@ static void draw_nps_graph(const AppViewModel *model, Rectangle bounds)
             );
 
         draw_overview_smoothed_area(
-            features,
+            curve,
+            curve_count,
             view_start,
             view_span,
             current_time,
@@ -1643,7 +1660,8 @@ static void draw_nps_graph(const AppViewModel *model, Rectangle bounds)
     else
     {
         draw_density_fill_columns(
-            features,
+            curve,
+            curve_count,
             view_start,
             view_span,
             current_time,
@@ -1664,10 +1682,10 @@ static void draw_nps_graph(const AppViewModel *model, Rectangle bounds)
                     : 1.0f
             );
 
-        for (size_t i = 1; i < features->nps_curve_count; ++i)
+        for (size_t i = 1; i < curve_count; ++i)
         {
-            const NpsPoint *a = &features->nps_curve[i - 1];
-            const NpsPoint *b = &features->nps_curve[i];
+            const NpsPoint *a = &curve[i - 1];
+            const NpsPoint *b = &curve[i];
 
             if (b->time_ms < view_start)
                 continue;
@@ -1738,6 +1756,39 @@ static void draw_nps_graph(const AppViewModel *model, Rectangle bounds)
         ),
         model->theme.accent
     );
+
+    if (
+        (!model->settings || model->settings->pause_markers_enabled) &&
+        model->pause_markers_ms &&
+        model->pause_marker_count > 0
+    )
+    {
+        const Color pause_color = {255, 59, 59, 235};
+        const float pause_thickness =
+            2.2f /
+            (g_ui_scale > 0.001f ? g_ui_scale : 1.0f);
+
+        for (size_t i = 0; i < model->pause_marker_count; ++i)
+        {
+            const double marker_time =
+                model->pause_markers_ms[i];
+
+            if (marker_time < view_start || marker_time > view_end)
+                continue;
+
+            const float marker_x =
+                left +
+                (float)((marker_time - view_start) / view_span) *
+                (right - left);
+
+            DrawLineEx(
+                (Vector2){marker_x, top},
+                (Vector2){marker_x, bottom},
+                pause_thickness,
+                pause_color
+            );
+        }
+    }
 }
 
 static void draw_density_panel(const AppViewModel *model, Rectangle bounds)
@@ -1870,7 +1921,7 @@ static void draw_debug_panel(const AppViewModel *model, Rectangle bounds)
     if (model->sanity_ready && model->sanity)
     {
         char sanity[192];
-        snprintf(sanity, sizeof(sanity), "sanity %s   requested %s", RulerSanityActionName(model->sanity->action), ReformRulerName(model->sanity->requested_ruler));
+        snprintf(sanity, sizeof(sanity), "sanity %s   requested %s   TanMDO final %s", RulerSanityActionName(model->sanity->action), ReformRulerName(model->sanity->requested_ruler), ReformRulerName(model->selected_ruler));
         ui_draw_text(UiFontRegular(), sanity, (Vector2){left, bounds.y + 76.0f}, 14.0f, 0.0f, MUTED);
     }
 
@@ -2069,33 +2120,6 @@ static void draw_footer(
         MUTED
     );
 
-    if (!model->tosu)
-        return;
-
-    char status[128];
-    snprintf(
-        status,
-        sizeof(status),
-        "tosu  |  %s",
-        model->tosu->client[0]
-            ? model->tosu->client
-            : "lazer"
-    );
-
-    const Vector2 size =
-        ui_measure_text(UiFontRegular(), status, 11.0f, 0.0f);
-
-    ui_draw_text(
-        UiFontRegular(),
-        status,
-        (Vector2){
-            (float)g_canvas_width - size.x - 22.0f,
-            y
-        },
-        11.0f,
-        0.0f,
-        GOOD
-    );
 }
 
 static void draw_disconnected(const AppViewModel *model)
@@ -2104,7 +2128,7 @@ static void draw_disconnected(const AppViewModel *model)
         fmaxf((float)g_canvas_width - 48.0f, 1.0f);
 
     const char *title = "TOSU OFFLINE";
-    const char *body = "Waiting for osu!lazer telemetry...";
+    const char *body = "Waiting for Tosu telemetry...";
     const char *detail =
         "The last valid state is preserved across brief poll drops.";
 
@@ -2690,15 +2714,13 @@ static void draw_hud_footer(
         append_hud_footer_item(footer, sizeof(footer), item);
     }
 
-    if (settings && settings->hud_show_client)
+    if (settings && settings->hud_show_pause_count)
     {
         snprintf(
             item,
             sizeof(item),
-            "tosu %s",
-            model->tosu->client[0]
-                ? model->tosu->client
-                : "lazer"
+            "PAUSES %zu",
+            model->pause_marker_count
         );
 
         append_hud_footer_item(footer, sizeof(footer), item);

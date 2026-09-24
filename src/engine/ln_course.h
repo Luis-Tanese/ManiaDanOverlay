@@ -80,6 +80,18 @@ bool LnCourseEvaluate(
     LnCourseResult *out_result
 );
 
+/* 
+ * structural features are extracted at base timing. 
+ * scale the release events per second to played time; occupancy, overlap and variation remain ratios.
+ */
+bool LnCourseEvaluateAtRate(
+    double sunny_sr,
+    const ChartFeatures *features,
+    const MinaCalcScores *msd,
+    double rate,
+    LnCourseResult *out_result
+);
+
 const char *LnCourseStageName(
     LnStage stage
 );

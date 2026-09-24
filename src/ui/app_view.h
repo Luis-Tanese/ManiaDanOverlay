@@ -28,6 +28,8 @@ typedef struct
     const TosuSnapshot *tosu;
     const Beatmap *beatmap;
     const ChartFeatures *features;
+    const NpsPoint *focus_nps_curve;
+    size_t focus_nps_curve_count;
     const SunnySrResult *sunny;
     const MinaCalcScores *msd;
     const LnCourseResult *ln_course;
@@ -65,6 +67,9 @@ typedef struct
     AppSettingsViewMode view_mode;
     DensityGraphMode graph_mode;
     int focus_span_seconds;
+
+    const double *pause_markers_ms;
+    size_t pause_marker_count;
 } AppViewModel;
 
 void AppViewDraw(

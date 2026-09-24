@@ -143,7 +143,7 @@ Windows-specific changes should be tested on a real Windows 10 or Windows 11 sys
 The main source tree is organized by responsibility:
 
 ```
-src/app/        application identity and shared application definitions
+src/app/        application identity, Focus density, and pause tracking
 src/beatmap/    beatmap representation, parsing, and active map fetching
 src/engine/     Sunny, Reform, LN Course, MinaCalc bridge, and chart analysis
 src/net/        native localhost HTTP client
@@ -180,6 +180,8 @@ Warnings introduced by a change should be fixed before submitting it.
 The Dan and LN analysis code is one of the most sensitive parts of the project.
 
 Calibration work is welcome, including new calibration sets for additional key modes or well-supported revisions to existing behavior. Changes should have a clear structural or data-driven reason and should be checked against several relevant charts rather than being tuned around a single map.
+
+For TanMDO, keep Sunny SR and the Reform ruler tables separate from the ruler decision. LN structural features are calculated at the chart's base timing; of those features, only release density is scaled by the active rate. Sunny is calculated at the played rate.
 
 When changing Reform, LN Course, Sunny, chart features, or ruler selection, include the following in the pull request description:
 
@@ -275,7 +277,7 @@ Avoid adding decorative effects that make the overlay harder to read or visually
 
 ## Settings
 
-Settings are stored in JSON and currently use schema version 5.
+Settings are stored in JSON and currently use schema version 6.
 
 Linux:
 
@@ -387,13 +389,15 @@ For general application changes, a useful smoke test is:
 4. Confirm the HUD updates.
 5. Switch between HUD and Extra Info.
 6. Switch between Overview and Focus.
-7. Change the Focus span.
-8. Resize the window smaller, wider, and taller.
-9. Open F2 settings at a compact window size.
-10. Load an LN-heavy map.
-11. Confirm LN Course and LN profile information appear correctly.
-12. Change the clock rate if the chart supports it.
-13. Restart the application and confirm settings persist.
+7. Change the Focus span and density interval.
+8. Pause and resume, then retry; check the markers and pause count reset.
+9. Check that simultaneous mod acronyms have spaces between them.
+10. Resize the window smaller, wider, and taller.
+11. Open F2 settings at a compact window size.
+12. Load an LN-heavy map.
+13. Confirm LN Course and LN profile information appear correctly.
+14. Change the clock rate if the chart supports it.
+15. Restart the application and confirm settings persist.
 
 If the change affects Linux window behavior, test X11 specifically.
 

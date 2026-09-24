@@ -46,6 +46,17 @@ bool RulerSanityEvaluate(
     RulerSanityResult *out_result
 );
 
+/* 
+ * TanMDO chooses the classified skill ruler for a supported rice family, retaining GENERAL if MSD strongly contradicts the classification.
+ * this changes ruler selection, never Sunny SR or Reform calibration values.
+ */
+ReformRuler TanMdoRulerSelect(
+    ReformRuler baseline_ruler,
+    ChartFamily family,
+    double family_confidence,
+    const RulerSanityResult *sanity
+);
+
 const char *RulerSanityActionName(
     RulerSanityAction action
 );

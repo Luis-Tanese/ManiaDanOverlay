@@ -391,7 +391,7 @@ bool SettingsPanelDraw(
         fmaxf(footer_top - header_bottom - 14.0f, 1.0f)
     };
 
-    const float content_height = 1160.0f;
+    const float content_height = 1255.0f;
     const float max_scroll =
         fmaxf(content_height - viewport.height, 0.0f);
 
@@ -517,24 +517,23 @@ bool SettingsPanelDraw(
     draw_label("Focus window", left, y, 12.0f, MUTED, false);
     y += 20.0f;
 
-    static const int spans[] =
-    {
-        15, 30, 45, 60, 90, 120, 180
-    };
+    size_t span_count = 0;
+    const int *spans =
+        AppSettingsFocusSpanPresets(&span_count);
 
     const int span_columns =
-        content_width < 430.0f ? 4 : 7;
+        content_width < 430.0f ? 4 : (int)span_count;
     const int span_rows =
-        (7 + span_columns - 1) / span_columns;
+        ((int)span_count + span_columns - 1) / span_columns;
     const float span_gap = 5.0f;
     const float span_width =
         (content_width - span_gap * (float)(span_columns - 1)) /
         (float)span_columns;
 
-    for (int i = 0; i < 7; ++i)
+    for (size_t i = 0; i < span_count; ++i)
     {
-        const int row = i / span_columns;
-        const int column = i % span_columns;
+        const int row = (int)i / span_columns;
+        const int column = (int)i % span_columns;
 
         char label[16];
         snprintf(label, sizeof(label), "%ds", spans[i]);
@@ -563,6 +562,66 @@ bool SettingsPanelDraw(
     y +=
         (31.0f + span_gap) * (float)span_rows +
         9.0f;
+
+    draw_label("Focus density detail", left, y, 12.0f, MUTED, false);
+    y += 20.0f;
+
+    size_t density_count = 0;
+    const int *density_intervals =
+        AppSettingsFocusDensityIntervals(&density_count);
+
+    const float density_gap = 5.0f;
+    const float density_width =
+        (content_width - density_gap * (float)(density_count - 1)) /
+        (float)density_count;
+
+    for (size_t i = 0; i < density_count; ++i)
+    {
+        char label[16];
+        snprintf(
+            label,
+            sizeof(label),
+            "%dms",
+            density_intervals[i]
+        );
+
+        if (
+            draw_button(
+                (Rectangle)
+                {
+                    left +
+                        (density_width + density_gap) *
+                        (float)i,
+                    y,
+                    density_width,
+                    31.0f
+                },
+                label,
+                settings->focus_density_interval_ms ==
+                    density_intervals[i],
+                theme
+            )
+        )
+        {
+            settings->focus_density_interval_ms =
+                density_intervals[i];
+            settings->graph_mode = APP_SETTINGS_GRAPH_FOCUS;
+            changed = true;
+        }
+    }
+
+    y += 39.0f;
+
+    changed |=
+        draw_toggle_row(
+            (Rectangle){left, y, content_width, 50.0f},
+            "Pause markers",
+            "Show Daniel-style red pause lines on the density graph.",
+            &settings->pause_markers_enabled,
+            theme
+        );
+
+    y += 60.0f;
 
     DrawLine((int)left, (int)y, (int)(left + content_width), (int)y, RULE);
     y += 14.0f;
@@ -606,9 +665,9 @@ bool SettingsPanelDraw(
     changed |=
         draw_toggle_row(
             (Rectangle){left, y, content_width, 50.0f},
-            "Tosu client",
-            "Show the connected Tosu client in the HUD footer.",
-            &settings->hud_show_client,
+            "Pause count",
+            "Show the current attempt pause count in the HUD footer.",
+            &settings->hud_show_pause_count,
             theme
         );
 
@@ -774,6 +833,9 @@ bool SettingsPanelDraw(
     );
 
     draw_label(build_label, left, y, 11.5f, MUTED, false);
+    y += 20.0f;
+
+    draw_label("Engine TanMDO (Sunny SR)", left, y, 11.5f, MUTED, false);
     y += 20.0f;
 
     char calibration_label[96];

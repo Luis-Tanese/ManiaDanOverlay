@@ -1,3 +1,7 @@
+#ifndef _WIN32
+#define _POSIX_C_SOURCE 200809L
+#endif
+
 #include "app_settings.h"
 
 #include <errno.h>
@@ -20,13 +24,12 @@
 
 static const int FOCUS_SPANS[] =
 {
-    15,
-    30,
-    45,
-    60,
-    90,
-    120,
-    180
+    15, 30, 45, 60, 90, 120, 180
+};
+
+static const int FOCUS_DENSITY_INTERVALS[] =
+{
+    25, 50, 100, 150, 250
 };
 
 static void set_error(
@@ -59,35 +62,92 @@ static int clamp_int(
     return value;
 }
 
-static int nearest_focus_span(
-    int value
+static int nearest_preset(
+    int value,
+    const int *presets,
+    size_t count
 )
 {
-    int nearest = FOCUS_SPANS[0];
+    if (!presets || count == 0)
+        return value;
+
+    int nearest = presets[0];
     int nearest_distance = value - nearest;
 
     if (nearest_distance < 0)
         nearest_distance = -nearest_distance;
 
-    for (
-        size_t i = 1;
-        i < sizeof(FOCUS_SPANS) / sizeof(FOCUS_SPANS[0]);
-        ++i
-    )
+    for (size_t i = 1; i < count; ++i)
     {
-        int distance = value - FOCUS_SPANS[i];
+        int distance = value - presets[i];
 
         if (distance < 0)
             distance = -distance;
 
         if (distance < nearest_distance)
         {
-            nearest = FOCUS_SPANS[i];
+            nearest = presets[i];
             nearest_distance = distance;
         }
     }
 
     return nearest;
+}
+
+const int *AppSettingsFocusSpanPresets(
+    size_t *count
+)
+{
+    if (count)
+        *count = sizeof(FOCUS_SPANS) / sizeof(FOCUS_SPANS[0]);
+
+    return FOCUS_SPANS;
+}
+
+const int *AppSettingsFocusDensityIntervals(
+    size_t *count
+)
+{
+    if (count)
+    {
+        *count =
+            sizeof(FOCUS_DENSITY_INTERVALS) /
+            sizeof(FOCUS_DENSITY_INTERVALS[0]);
+    }
+
+    return FOCUS_DENSITY_INTERVALS;
+}
+
+bool AppSettingsEqual(
+    const AppSettings *a,
+    const AppSettings *b
+)
+{
+    if (!a || !b)
+        return false;
+
+    return
+        a->version == b->version &&
+        a->view_mode == b->view_mode &&
+        a->graph_mode == b->graph_mode &&
+        a->focus_span_seconds == b->focus_span_seconds &&
+        a->focus_density_interval_ms == b->focus_density_interval_ms &&
+        a->pause_markers_enabled == b->pause_markers_enabled &&
+        a->always_on_top == b->always_on_top &&
+        a->hud_show_mod_rate == b->hud_show_mod_rate &&
+        a->hud_show_key_mode == b->hud_show_key_mode &&
+        a->hud_show_graph_mode == b->hud_show_graph_mode &&
+        a->hud_show_pause_count == b->hud_show_pause_count &&
+        a->hud_show_msd == b->hud_show_msd &&
+        a->remember_window_position == b->remember_window_position &&
+        a->remember_window_size == b->remember_window_size &&
+        a->has_window_position == b->has_window_position &&
+        a->window_x == b->window_x &&
+        a->window_y == b->window_y &&
+        a->hud_window_width == b->hud_window_width &&
+        a->hud_window_height == b->hud_window_height &&
+        a->extra_info_window_width == b->extra_info_window_width &&
+        a->extra_info_window_height == b->extra_info_window_height;
 }
 
 static bool json_bool_or(
@@ -280,18 +340,20 @@ void AppSettingsDefaults(
         .view_mode = APP_SETTINGS_VIEW_HUD,
         .graph_mode = APP_SETTINGS_GRAPH_OVERVIEW,
         .focus_span_seconds = 30,
+        .focus_density_interval_ms = 100,
+        .pause_markers_enabled = true,
 
         .always_on_top = true,
 
         .hud_show_mod_rate = true,
         .hud_show_key_mode = true,
         .hud_show_graph_mode = true,
-        .hud_show_client = false,
+        .hud_show_pause_count = true,
         .hud_show_msd = true,
 
         .remember_window_position = true,
         .remember_window_size = true,
-        .has_window_position = true,
+        .has_window_position = false,
 
         .window_x = 1920,
         .window_y = 381,
@@ -329,7 +391,19 @@ void AppSettingsSanitize(
     }
 
     settings->focus_span_seconds =
-        nearest_focus_span(settings->focus_span_seconds);
+        nearest_preset(
+            settings->focus_span_seconds,
+            FOCUS_SPANS,
+            sizeof(FOCUS_SPANS) / sizeof(FOCUS_SPANS[0])
+        );
+
+    settings->focus_density_interval_ms =
+        nearest_preset(
+            settings->focus_density_interval_ms,
+            FOCUS_DENSITY_INTERVALS,
+            sizeof(FOCUS_DENSITY_INTERVALS) /
+                sizeof(FOCUS_DENSITY_INTERVALS[0])
+        );
 
     AppSettingsSetViewSize(
         settings,
@@ -505,6 +579,20 @@ bool AppSettingsLoad(
             settings->focus_span_seconds
         );
 
+    settings->focus_density_interval_ms =
+        json_int_or(
+            root,
+            "focus_density_interval_ms",
+            settings->focus_density_interval_ms
+        );
+
+    settings->pause_markers_enabled =
+        json_bool_or(
+            root,
+            "pause_markers",
+            settings->pause_markers_enabled
+        );
+
     settings->always_on_top =
         json_bool_or(
             root,
@@ -538,11 +626,11 @@ bool AppSettingsLoad(
                 settings->hud_show_graph_mode
             );
 
-        settings->hud_show_client =
+        settings->hud_show_pause_count =
             json_bool_or(
                 hud_content,
-                "client",
-                settings->hud_show_client
+                "pause_count",
+                settings->hud_show_pause_count
             );
 
         settings->hud_show_msd =
@@ -665,8 +753,10 @@ bool AppSettingsSave(
         return false;
     }
 
-    /* Write a complete temporary file first. A failed save should never leave
-       settings.json half-written. */
+    /* 
+     * write a complete temporary file first. 
+     * a failed save should never leave settings.json half-written. 
+     */
 
     char temporary_path[SETTINGS_PATH_CAPACITY + 8];
 
@@ -716,12 +806,14 @@ bool AppSettingsSave(
             "  \"view_mode\": \"%s\",\n"
             "  \"graph_mode\": \"%s\",\n"
             "  \"focus_span_seconds\": %d,\n"
+            "  \"focus_density_interval_ms\": %d,\n"
+            "  \"pause_markers\": %s,\n"
             "  \"always_on_top\": %s,\n"
             "  \"hud_content\": {\n"
             "    \"mod_rate\": %s,\n"
             "    \"key_mode\": %s,\n"
             "    \"graph_mode\": %s,\n"
-            "    \"client\": %s,\n"
+            "    \"pause_count\": %s,\n"
             "    \"msd\": %s\n"
             "  },\n"
             "  \"window\": {\n"
@@ -744,11 +836,13 @@ bool AppSettingsSave(
             view_mode,
             graph_mode,
             clean.focus_span_seconds,
+            clean.focus_density_interval_ms,
+            clean.pause_markers_enabled ? "true" : "false",
             clean.always_on_top ? "true" : "false",
             clean.hud_show_mod_rate ? "true" : "false",
             clean.hud_show_key_mode ? "true" : "false",
             clean.hud_show_graph_mode ? "true" : "false",
-            clean.hud_show_client ? "true" : "false",
+            clean.hud_show_pause_count ? "true" : "false",
             clean.hud_show_msd ? "true" : "false",
             clean.remember_window_position ? "true" : "false",
             clean.remember_window_size ? "true" : "false",

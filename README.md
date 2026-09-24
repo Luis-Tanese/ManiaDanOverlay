@@ -72,9 +72,13 @@ Est. Dan: GAMMA MID (13.4)
 Stamina, Jumpstream 32.69 MSD
 ```
 
+![Rice chart showing the Dan estimate and density graph](docs/media/rice.gif)
+
 For LN Course charts, the HUD also keeps the LN profile description and MinaCalc head-pattern information visible.
 
-The supporting HUD content can be adjusted from Settings. Mod/rate, the 4K label, graph mode, Tosu client information, and MinaCalc pattern/MSD output can be shown or hidden independently. The density graph and current Dan or LN Course result remain the core HUD elements.
+![LN chart showing the LN Course estimate and profile](docs/media/ln.gif)
+
+The supporting HUD content can be adjusted from Settings. Mod/rate, the 4K label, graph mode, pause count, and MinaCalc pattern/MSD output can be shown or hidden independently. The density graph and current Dan or LN Course result remain the core HUD elements.
 
 ### Extra Info
 
@@ -91,7 +95,7 @@ Extra Info keeps the full analysis layout. It has:
 
 ## Density graph
 
-The density graph is built from chart density samples at 250 ms intervals.
+The Overview density graph is built from chart density samples at 250 ms intervals.
 
 ### Overview mode
 
@@ -103,7 +107,11 @@ Display-only smoothing is applied in Overview mode to keep long charts visually 
 
 Focus mode acts like a scrolling camera. The current play position stays near the left-middle portion of the graph while the chart moves through the selected time window.
 
-Focus uses the detailed density data without the Overview smoothing pass.
+Focus has its own density interval: 25, 50, 100, 150, or 250 ms. It defaults to 100 ms. This only changes how the graph looks; it doesn't change the rating.
+
+![Focus density graph following the current play position](docs/media/focus.gif)
+
+Pauses during the current attempt show as red lines on the graph. The markers clear when you retry or switch maps, and you can turn them off in Settings.
 
 The graph fill and outline use the current Dan or LN rank theme color.
 
@@ -231,13 +239,13 @@ Tier boundaries are placed at the midpoint between adjacent means. Progress insi
 
 #### Ruler selection
 
-I chose the ruler selection to be conservative.
+I kept the Reform ruler tables and Sunny calculation, but TanMDO is less conservative about picking a skill ruler.
 
 For lower and mid-level charts, the native rhythm profile is used to reproduce the reference low-tier pattern classification behavior.
 
-For higher-SR charts, structural features are used to classify the chart as Jack, Speed, Stamina, Tech, Stream, or Hybrid. A skill-specific ruler is only used when the evidence is strong enough. Otherwise the General ruler is retained.
+For higher-SR charts, structural features are used to classify the chart as Jack, Speed, Stamina, Tech, Stream, or Hybrid. TanMDO can use the matching skill ruler at 30% classification confidence. Hybrid stays on General.
 
-MinaCalc is also used as a conservative second opinion. It may support a skill ruler or veto a weak selection back to General, but it does not freely switch one skill ruler into another.
+MinaCalc is also used as a second opinion. Strong evidence for a different skill can keep the result on General, but it doesn't switch one selected skill ruler into another.
 
 The internal classifier and ruler decision are diagnostic tools, so they aren't present in the normal HUD.
 
@@ -281,7 +289,7 @@ LN Course uses a global 16-stage ladder:
 Yoake  Yuugure  Yoru  Yami  Yume  Yokaze
 ```
 
-The estimator combines the Sunny base value with LN-specific structural information, including hold occupancy, simultaneous holds, release density, LN duration variation, and the interaction between base difficulty and occupancy.
+The estimator combines the Sunny base value with LN-specific structural information, including hold occupancy, simultaneous holds, release density, LN duration variation, and the interaction between base difficulty and occupancy. TanMDO also scales LN release density by the active clock rate, so a rate mod affects the release part of the LN estimate.
 
 The LN family label is descriptive only. It does not select a different LN rating ruler.
 
@@ -293,6 +301,8 @@ Current player-facing LN descriptions are:
 - Speed / Density LN
 
 These descriptions are based on competing structural signals and are separate from the LN Course DP calculation.
+
+I'll be honest and say these LN descriptions still need work done since they are still decently inaccurate, they will be adjusted in the future.
 
 ### Theme and rank colors
 
@@ -313,6 +323,8 @@ Rank colors are modeled after the osu!lazer's difficulty-color progression. The 
 ### Settings
 
 Settings are stored as JSON and are created automatically on first run.
+
+![Settings panel showing the overlay's display options](docs/media/settings.gif)
 
 Linux:
 
@@ -336,22 +348,24 @@ Current defaults:
 
 ```json
 {
-  "version": 5,
+  "version": 6,
   "view_mode": "hud",
   "graph_mode": "overview",
   "focus_span_seconds": 30,
+  "focus_density_interval_ms": 100,
+  "pause_markers": true,
   "always_on_top": true,
   "hud_content": {
     "mod_rate": true,
     "key_mode": true,
     "graph_mode": true,
-    "client": false,
+    "pause_count": true,
     "msd": true
   },
   "window": {
     "remember_position": true,
     "remember_size": true,
-    "has_position": true,
+    "has_position": false,
     "x": 1920,
     "y": 381,
     "hud": {
@@ -404,42 +418,9 @@ libcurl is not used. Tosu communication is handled by `src/net/local_http.c`, a 
 
 The local HTTP implementation supports the response framing needed by Tosu, including normal `Content-Length` responses and chunked transfer encoding (I was able to shrink file size even lower with this >:]).
 
-### Source layout
-
-```
-ManiaDanOverlay/
-|-- assets/
-|   `-- fonts/
-|-- cmake/
-|   |-- EmbedFonts.cmake
-|   |-- StageLinuxX11Release.cmake
-|   |-- StageWindowsRelease.cmake
-|   `-- toolchains/
-|       `-- mingw64.cmake
-|-- scripts/
-|   |-- build-linux-x11-release.sh
-|   `-- build-windows-mingw64.sh
-|-- src/
-|   |-- app/
-|   |-- beatmap/
-|   |-- engine/
-|   |-- net/
-|   |-- platform/
-|   |-- settings/
-|   |-- tosu/
-|   |-- ui/
-|   `-- main.c
-|-- vendor/
-|   |-- minacalc/
-|   |-- raylib/
-|   `-- yyjson/
-|-- .gitmodules
-`-- CMakeLists.txt
-```
-
 ### Building from source
 
-Clone the repository with its submodules:
+The complete source ZIP already has `vendor/` and `assets/`. If you're cloning the Git repository instead, get its submodules:
 
 ```bash
 git clone --recurse-submodules <repository-url>

@@ -111,7 +111,8 @@ static double sr_to_dp(
 
 static double regression_dp(
     double dp_sr,
-    const ChartFeatures *features
+    const ChartFeatures *features,
+    double rate
 )
 {
     const Mania4KLnRegressionCalibration *cal =
@@ -124,7 +125,7 @@ static double regression_dp(
         features ? features->simultaneous_hold : 0.0;
 
     const double release_density =
-        features ? features->release_density : 0.0;
+        features ? features->release_density * rate : 0.0;
 
     const double ln_duration_cv =
         features ? features->ln_duration_cv : 0.0;
@@ -467,6 +468,19 @@ bool LnCourseEvaluate(
     LnCourseResult *out_result
 )
 {
+    return LnCourseEvaluateAtRate(
+        sunny_sr, features, msd, 1.0, out_result
+    );
+}
+
+bool LnCourseEvaluateAtRate(
+    double sunny_sr,
+    const ChartFeatures *features,
+    const MinaCalcScores *msd,
+    double rate,
+    LnCourseResult *out_result
+)
+{
     if (!out_result)
         return false;
 
@@ -479,7 +493,8 @@ bool LnCourseEvaluate(
     (void)msd;
 
     if (
-        sunny_sr <= 0.0 ||
+        !isfinite(sunny_sr) || sunny_sr <= 0.0 ||
+        !isfinite(rate) || rate <= 0.0 ||
         !features
     )
     {
@@ -495,7 +510,8 @@ bool LnCourseEvaluate(
     double corrected =
         regression_dp(
             base_dp,
-            features
+            features,
+            rate
         );
 
     corrected =

@@ -4,13 +4,12 @@
 #include <stdbool.h>
 
 #define TOSU_TEXT_MAX 256
-#define TOSU_MOD_MAX 32
+#define TOSU_MOD_MAX 96
 
 typedef struct
 {
     bool connected;
 
-    char client[32];
     char state[32];
 
     char artist[TOSU_TEXT_MAX];

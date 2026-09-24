@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#define APP_SETTINGS_VERSION 5
+#define APP_SETTINGS_VERSION 6
 
 #define APP_SETTINGS_HUD_DEFAULT_WIDTH 503
 #define APP_SETTINGS_HUD_DEFAULT_HEIGHT 240
@@ -41,13 +41,15 @@ typedef struct
     AppSettingsViewMode view_mode;
     AppSettingsGraphMode graph_mode;
     int focus_span_seconds;
+    int focus_density_interval_ms;
+    bool pause_markers_enabled;
 
     bool always_on_top;
 
     bool hud_show_mod_rate;
     bool hud_show_key_mode;
     bool hud_show_graph_mode;
-    bool hud_show_client;
+    bool hud_show_pause_count;
     bool hud_show_msd;
 
     bool remember_window_position;
@@ -62,6 +64,14 @@ typedef struct
     int extra_info_window_width;
     int extra_info_window_height;
 } AppSettings;
+
+const int *AppSettingsFocusSpanPresets(size_t *count);
+const int *AppSettingsFocusDensityIntervals(size_t *count);
+
+bool AppSettingsEqual(
+    const AppSettings *a,
+    const AppSettings *b
+);
 
 void AppSettingsDefaults(
     AppSettings *settings

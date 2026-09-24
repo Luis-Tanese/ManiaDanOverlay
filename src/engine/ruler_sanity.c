@@ -364,6 +364,40 @@ bool RulerSanityEvaluate(
     return true;
 }
 
+ReformRuler TanMdoRulerSelect(
+    ReformRuler baseline_ruler,
+    ChartFamily family,
+    double family_confidence,
+    const RulerSanityResult *sanity
+)
+{
+    const ReformRuler candidate = family_ruler(family);
+    if (candidate == REFORM_RULER_GENERAL ||
+        !isfinite(family_confidence) || family_confidence < 0.30)
+        return baseline_ruler;
+
+    /* 
+     * promote GENERAL after a confident family classification, including after a soft sanity veto. 
+     * do not swap one skill ruler for another. 
+    */
+    if (baseline_ruler != REFORM_RULER_GENERAL)
+        return baseline_ruler;
+
+    if (sanity && sanity->top_support > 0.0 &&
+        sanity->msd_top_ruler != candidate)
+    {
+        const double candidate_support = support_for_ruler(sanity, candidate);
+        const double disagreement = candidate_support > 0.0
+            ? sanity->top_support / candidate_support
+            : INFINITY;
+        if (disagreement >= 1.40 &&
+            sanity->top_to_second_ratio >= 1.06)
+            return baseline_ruler;
+    }
+
+    return candidate;
+}
+
 
 const char *RulerSanityActionName(
     RulerSanityAction action

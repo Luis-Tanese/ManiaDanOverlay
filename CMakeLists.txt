@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(ManiaDanOverlay
-    VERSION 1.2.0
+    VERSION 1.3.0
     LANGUAGES C CXX
 )
 
@@ -206,6 +206,9 @@ add_executable(
     ${MANIADANOVERLAY_PLATFORM_SOURCES}
 
     src/main.c
+
+    src/app/focus_density.c
+    src/app/pause_tracker.c
 
     src/platform/platform_paths.c
     src/settings/app_settings.c
