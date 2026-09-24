@@ -2013,30 +2013,6 @@ bool RhythmProfileEvaluate(
     else
         family = primary_family;
 
-    const double drain_s =
-        total_ms /
-        1000.0;
-
-    if (
-        (
-            family == CHART_FAMILY_SPEED ||
-            family == CHART_FAMILY_STREAM
-        ) &&
-        beatmap->bpm > MANIA4K_CALIBRATION.rhythm_profile.stamina_bpm_floor &&
-        drain_s > MANIA4K_CALIBRATION.rhythm_profile.stamina_duration_floor
-    )
-    {
-        family = CHART_FAMILY_STAMINA;
-
-        if (
-            primary_family == CHART_FAMILY_SPEED ||
-            primary_family == CHART_FAMILY_STREAM
-        )
-        {
-            primary_family = CHART_FAMILY_STAMINA;
-        }
-    }
-
     double total_importance = 1.0;
 
     for (

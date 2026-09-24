@@ -1358,6 +1358,46 @@ int main(void)
             }
         }
 
+        /* 
+         * keep a strong base-timing rhythm classification across the SR 7 classifier boundary when played-rate MSD agrees with its ruler.
+         * otherwise retain the usual classification above. 
+         */
+        if (
+            sunny_matches_current &&
+            rhythm_matches_current &&
+            msd_matches_current &&
+            rhythm_profile.confidence >= 0.50
+        )
+        {
+            bool rhythm_uses_skillset = false;
+            const ReformRuler rhythm_ruler =
+                RhythmProfileRuler(
+                    &rhythm_profile,
+                    &rhythm_uses_skillset
+                );
+
+            RulerSanityResult rhythm_evidence = {0};
+
+            if (
+                rhythm_ruler != REFORM_RULER_GENERAL &&
+                RulerSanityEvaluate(
+                    rhythm_ruler,
+                    rhythm_profile.family,
+                    rhythm_profile.confidence,
+                    &msd,
+                    &rhythm_evidence
+                ) &&
+                rhythm_evidence.msd_top_ruler == rhythm_ruler
+            )
+            {
+                classification_ready = true;
+                active_family = rhythm_profile.family;
+                active_family_confidence = rhythm_profile.confidence;
+                selected_ruler = rhythm_ruler;
+                uses_skillset_ruler = rhythm_uses_skillset;
+            }
+        }
+
         RulerSanityResult sanity = {0};
 
         if (
